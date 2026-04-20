@@ -20,7 +20,6 @@ The system allows users to:
 
 ## Objectives
 
-### MVP
 - Upload PDF papers
 - Extract paragraph-level content
 - Generate paragraph summaries and key points
@@ -30,11 +29,6 @@ The system allows users to:
 - Support paragraph and bullet-list editing
 - Support text and PDF highlights
 
-### Full Goal
-- Build a more complete AI-assisted academic reading environment
-- Support nonlinear reading workflow
-- Improve interaction between generated content and original paper content
-- Provide richer note-taking and research assistance features
 
 ---
 
@@ -157,9 +151,9 @@ This repository is under active development as a senior project.
 
 - user account and login system
 
-- paragraph-to-PDF alignment refinement
+- Inproving the text-to -speech reading system
 
-- reading workflow optimization
+- Evaluating a local file-based storage system as a lightweight alternative to part of the database workflow
 
 
 

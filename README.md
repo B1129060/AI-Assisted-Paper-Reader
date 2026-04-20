@@ -10,11 +10,11 @@ An AI-assisted academic paper reading system for PDF-based paper parsing, summar
 This project aims to reduce the difficulty of reading academic papers by combining PDF parsing, paragraph extraction, summary generation, translation, PDF-to-text alignment, and user-side manual correction.
 
 The system allows users to:
-- upload and read academic paper PDFs,
-- view extracted paragraph content side by side with the original PDF,
-- edit incorrect extracted results,
-- regenerate summaries and overview content,
-- and add highlights to both generated text and PDF regions.
+- Upload and read academic paper PDFs
+- View extracted paragraph content side by side with the original PDF
+- Edit incorrect extracted results
+- Regenerate summaries and overview content
+- Add highlights to both generated text and PDF regions
 
 ---
 
@@ -130,26 +130,26 @@ This repository is under active development as a senior project.
 
 ### Completed
 
-- frontend-backend system setup
+- Frontend-backend system setup
 
-- database integration
+- Database integration
 
 - PDF upload and parsing
 
-- paragraph extraction
+- Paragraph extraction
 
-- summary and overview generation
+- Summary and overview generation
 
-- translation support
+- Translation support
 
-- paragraph editing
+- Paragraph editing
 
-- text and PDF highlighting
+- Text and PDF highlighting
 
 
 ### In Progress
 
-- user account and login system
+- User account and login system
 
 - Inproving the text-to -speech reading system
 

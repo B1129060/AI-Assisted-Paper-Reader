@@ -235,7 +235,7 @@ translation completed
 
 本系統可分成兩種執行方式：
 
-1. **線上展示 / 正式部署模式**：部署於學校 Ubuntu VM，透過 Apache reverse proxy 提供 `/workspace7/` 前端與 `/workspace7/api/` 後端 API，並整合學校 SSO。
+1. **線上展示 / 正式部署模式**：部署於學校 Ubuntu VM，透過 Apache reverse proxy 提供 `/workspace7/` 前端與 `/workspace7/api/` 後端 API，並整合學校 SSO，並整合學校 SSO，可直接用瀏覽器開啟https://air.cgu.edu.tw/workspace7/後執行系統，不需額外下載和安裝。
 2. **本地端測試 / 開發模式**：下載原始碼後在本機啟動 PostgreSQL、FastAPI、worker 與 React，使用 `AUTH_MODE=dev` 測試主要功能，不需要學校 SSO。
 
 > 注意：本專案不應提交真實 `.env`、API Key、DB 密碼、JWT secret、上傳檔案、log、venv、node_modules 或 dist 至 GitHub。請使用 `.env.example` 建立自己的本機設定。

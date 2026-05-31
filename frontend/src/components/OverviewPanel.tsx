@@ -5,6 +5,7 @@ import HighlightableText from "./HighlightableText";
 type Props = {
   paperId: number;
   overview: PaperOverview;
+  hoverOverview?: PaperOverview | null;
   language: "en" | "zh";
   highlightColor: HighlightColor;
   textHighlights: TextHighlight[];
@@ -14,9 +15,24 @@ type Props = {
   textHighlightMode: boolean;
 };
 
+type OverviewWithZh = PaperOverview & {
+  abstract_summary_zh?: string | null;
+  overall_summary_zh?: string | null;
+  overall_key_points_zh?: string[] | null;
+  section_summaries_zh?: Array<{
+    section_title?: string | null;
+    summary?: string | null;
+  }> | null;
+  highlight_summaries_zh?: Array<{
+    title?: string | null;
+    summary?: string | null;
+  }> | null;
+};
+
 export default function OverviewPanel({
   paperId,
   overview,
+  hoverOverview = null,
   language,
   textHighlightMode,
   highlightColor,
@@ -25,6 +41,23 @@ export default function OverviewPanel({
   onTextHighlightDeleted,
   onJumpToSection,
 }: Props) {
+  const overviewWithZh = overview as OverviewWithZh;
+  const hoverOverviewWithZh = hoverOverview as OverviewWithZh | null;
+
+  function getHoverTranslation(primary?: string | null, fallback?: string | null) {
+    if (language !== "en") return null;
+    return primary || fallback || null;
+  }
+
+  function getHoverTranslationItem(
+    primaryValues: string[] | null | undefined,
+    fallbackValues: string[] | null | undefined,
+    index: number
+  ) {
+    if (language !== "en") return null;
+    return primaryValues?.[index] || fallbackValues?.[index] || null;
+  }
+
   return (
     <div className="overview-panel">
       {overview.abstract_summary && (
@@ -37,6 +70,7 @@ export default function OverviewPanel({
             fieldName="abstract_summary"
             language={language}
             text={overview.abstract_summary}
+            hoverTranslation={getHoverTranslation(hoverOverviewWithZh?.abstract_summary, overviewWithZh.abstract_summary_zh)}
             color={highlightColor}
             highlights={textHighlights}
             enabled={textHighlightMode}
@@ -55,6 +89,7 @@ export default function OverviewPanel({
           fieldName="overall_summary"
           language={language}
           text={overview.overall_summary}
+          hoverTranslation={getHoverTranslation(hoverOverviewWithZh?.overall_summary, overviewWithZh.overall_summary_zh)}
           color={highlightColor}
           highlights={textHighlights}
           enabled={textHighlightMode}
@@ -76,6 +111,7 @@ export default function OverviewPanel({
                 itemIndex={idx}
                 language={language}
                 text={point}
+                hoverTranslation={getHoverTranslationItem(hoverOverviewWithZh?.overall_key_points, overviewWithZh.overall_key_points_zh, idx)}
                 color={highlightColor}
                 highlights={textHighlights}
                 enabled={textHighlightMode}
@@ -113,6 +149,7 @@ export default function OverviewPanel({
                 itemIndex={idx}
                 language={language}
                 text={sec.summary}
+                hoverTranslation={getHoverTranslation(hoverOverviewWithZh?.section_summaries?.[idx]?.summary, overviewWithZh.section_summaries_zh?.[idx]?.summary)}
                 color={highlightColor}
                 highlights={textHighlights}
                 enabled={textHighlightMode}
@@ -138,6 +175,7 @@ export default function OverviewPanel({
                 itemIndex={idx}
                 language={language}
                 text={item.summary}
+                hoverTranslation={getHoverTranslation(hoverOverviewWithZh?.highlight_summaries?.[idx]?.summary, overviewWithZh.highlight_summaries_zh?.[idx]?.summary)}
                 color={highlightColor}
                 highlights={textHighlights}
                 enabled={textHighlightMode}

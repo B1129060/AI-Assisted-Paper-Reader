@@ -1,26 +1,24 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.paper_overview import PaperOverview
+from app.models.user import User
+from app.services.auth_service import get_current_user
+from app.services.ownership_service import get_owned_paper_or_404
 from app.schemas.paper import PaperOverviewResponse
-from app.services.overview_regenerator import regenerate_full_overview
-from app.models.highlight import TextHighlight
+from app.services.resource_guard import ensure_can_start_processing_task
+from app.services.task_service import (
+    TASK_REGENERATE_OVERVIEW,
+    create_regenerate_overview_task,
+    get_active_task_for_paper,
+)
 
 router = APIRouter(prefix="/papers", tags=["Overview"])
-
-
-def _delete_overview_text_highlights(db: Session, paper_id: int) -> None:
-    (
-        db.query(TextHighlight)
-        .filter(
-            TextHighlight.paper_id == paper_id,
-            TextHighlight.scope == "overview",
-        )
-        .delete(synchronize_session=False)
-    )
+logger = logging.getLogger(__name__)
 
 
 @router.get("/{paper_id}/overview", response_model=PaperOverviewResponse)
@@ -28,7 +26,10 @@ def get_paper_overview(
     paper_id: int,
     lang: str = Query("en", pattern="^(en|zh)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    get_owned_paper_or_404(db, paper_id, current_user)
+
     overview = db.query(PaperOverview).filter(PaperOverview.paper_id == paper_id).first()
     if not overview:
         raise HTTPException(status_code=404, detail="Paper overview not found.")
@@ -82,12 +83,61 @@ def get_paper_overview(
 def regenerate_paper_overview(
     paper_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    try:
-        _delete_overview_text_highlights(db, paper_id)
-        db.commit()
-        return regenerate_full_overview(db, paper_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to regenerate overview: {str(e)}")
+    paper = get_owned_paper_or_404(db, paper_id, current_user)
+
+    if paper.parse_status != "processed":
+        raise HTTPException(
+            status_code=409,
+            detail="PDF 仍未完成解析，暫時無法重新生成全文摘要。",
+        )
+
+    existing_task = get_active_task_for_paper(
+        db,
+        paper_id=paper_id,
+        task_type=TASK_REGENERATE_OVERVIEW,
+    )
+    if existing_task:
+        logger.info(
+            "Regenerate overview skipped because task is already active paper_id=%s user_id=%s task_id=%s status=%s",
+            paper_id,
+            current_user.id,
+            existing_task.id,
+            existing_task.status,
+        )
+        return {
+            "paper_id": paper_id,
+            "status": existing_task.status,
+        }
+
+    if paper.overview_status in ("queued", "processing"):
+        logger.warning(
+            "Regenerate overview rejected because overview is already active paper_id=%s user_id=%s status=%s",
+            paper_id,
+            current_user.id,
+            paper.overview_status,
+        )
+        return {
+            "paper_id": paper_id,
+            "status": paper.overview_status,
+        }
+
+    ensure_can_start_processing_task(db, current_user)
+
+    task = create_regenerate_overview_task(db, paper=paper, user=current_user)
+    db.commit()
+    db.refresh(paper)
+    db.refresh(task)
+
+    logger.info(
+        "Regenerate overview queued paper_id=%s user_id=%s task_id=%s",
+        paper_id,
+        current_user.id,
+        task.id,
+    )
+
+    return {
+        "paper_id": paper_id,
+        "status": task.status,
+    }

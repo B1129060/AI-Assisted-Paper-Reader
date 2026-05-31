@@ -1,10 +1,13 @@
 import json
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from sqlalchemy.orm import Session
 
 from app.models.paragraph import Paragraph
 from app.models.paper_overview import PaperOverview
+from app.models.paper import Paper
+from app.models.highlight import TextHighlight
 from app.services.overview_generator import (
     generate_overview,
     generate_section_summaries,
@@ -22,6 +25,48 @@ def _parse_json_list(raw: str | None) -> list:
     except Exception:
         return []
 
+
+
+def _has_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _has_non_empty_list(value: Any) -> bool:
+    return isinstance(value, list) and len(value) > 0
+
+
+def _validate_overview_payload(
+    overview_data: dict,
+    section_summaries: list,
+    abstract_summary: str,
+) -> None:
+    """
+    Prevent an incomplete regenerate result from overwriting the last usable
+    overview. If generation is incomplete, the caller marks the task failed and
+    the old PaperOverview row remains unchanged.
+    """
+    missing: list[str] = []
+
+    if not _has_text(abstract_summary):
+        missing.append("abstract_summary")
+
+    if not _has_text(overview_data.get("overall_summary")):
+        missing.append("overall_summary")
+
+    if not _has_non_empty_list(overview_data.get("overall_key_points")):
+        missing.append("overall_key_points")
+
+    if not _has_non_empty_list(overview_data.get("highlight_summaries")):
+        missing.append("highlight_summaries")
+
+    if not _has_non_empty_list(section_summaries):
+        missing.append("section_summaries")
+
+    if missing:
+        raise ValueError(
+            "Generated overview was incomplete; old overview was kept. "
+            f"Missing or empty fields: {', '.join(missing)}."
+        )
 
 def rebuild_elements_from_db(db: Session, paper_id: int, lang: str = "en") -> List[dict]:
     rows = (
@@ -71,6 +116,12 @@ def regenerate_full_overview(db: Session, paper_id: int) -> dict:
     section_summaries = generate_section_summaries(elements_en)
     abstract_summary = generate_abstract_summary(elements_en)
 
+    _validate_overview_payload(
+        overview_data=overview_data,
+        section_summaries=section_summaries,
+        abstract_summary=abstract_summary,
+    )
+
     overview_payload = {
         "abstract_summary": abstract_summary,
         "overall_summary": overview_data["overall_summary"],
@@ -111,3 +162,32 @@ def regenerate_full_overview(db: Session, paper_id: int) -> dict:
         "paper_id": paper_id,
         "status": "regenerated",
     }
+
+def _delete_overview_text_highlights(db: Session, paper_id: int) -> None:
+    (
+        db.query(TextHighlight)
+        .filter(
+            TextHighlight.paper_id == paper_id,
+            TextHighlight.scope == "overview",
+        )
+        .delete(synchronize_session=False)
+    )
+
+
+def process_regenerate_overview_task(db: Session, paper_id: int) -> dict:
+    result = regenerate_full_overview(db, paper_id)
+
+    _delete_overview_text_highlights(db, paper_id)
+
+    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    if not paper:
+        raise ValueError("Paper not found.")
+
+    paper.overview_status = "completed"
+    paper.overview_error = None
+    paper.overview_finished_at = datetime.now(timezone.utc)
+    paper.last_error_message = None
+
+    db.commit()
+
+    return result

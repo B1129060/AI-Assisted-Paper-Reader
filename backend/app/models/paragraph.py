@@ -27,6 +27,7 @@ class Paragraph(Base):
     text_zh = Column(Text, nullable=True)
     summary_zh = Column(Text, nullable=True)
     key_points_zh = Column(Text, nullable=True)  # JSON string
+    intro_text_zh = Column(Text, nullable=True)
     items_zh = Column(Text, nullable=True)       # JSON string
 
     # ⭐ PDF 定位欄位（新加）

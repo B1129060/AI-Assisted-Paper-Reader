@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
-from typing import List,  Optional
+from typing import List, Optional
 
 from app.schemas.paragraph import ParagraphResult, ElementResponse
 
@@ -11,6 +11,20 @@ class PaperResponse(BaseModel):
     original_filename: str
     stored_file_path: str
     parse_status: str
+    parse_error: str | None = None
+    parse_started_at: str | None = None
+    parse_finished_at: str | None = None
+    overview_status: str
+    overview_error: str | None = None
+    overview_started_at: str | None = None
+    overview_finished_at: str | None = None
+    zh_translation_status: str
+    zh_translation_error: str | None = None
+    export_status: str
+    export_error: str | None = None
+    export_started_at: str | None = None
+    export_finished_at: str | None = None
+    last_error_message: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -21,9 +35,22 @@ class PaperListItemResponse(BaseModel):
     title: str | None
     original_filename: str
     parse_status: str
+    parse_error: str | None = None
+    parse_started_at: str | None = None
+    parse_finished_at: str | None = None
+    overview_status: str
+    overview_error: str | None = None
+    overview_started_at: str | None = None
+    overview_finished_at: str | None = None
     zh_translation_status: str
+    zh_translation_error: str | None = None
     zh_translation_started_at: str | None = None
     zh_translation_finished_at: str | None = None
+    export_status: str
+    export_error: str | None = None
+    export_started_at: str | None = None
+    export_finished_at: str | None = None
+    last_error_message: str | None = None
 
 
 class PaperDetailResponse(BaseModel):
@@ -31,9 +58,22 @@ class PaperDetailResponse(BaseModel):
     title: str | None
     original_filename: str
     parse_status: str
+    parse_error: str | None = None
+    parse_started_at: str | None = None
+    parse_finished_at: str | None = None
+    overview_status: str
+    overview_error: str | None = None
+    overview_started_at: str | None = None
+    overview_finished_at: str | None = None
     zh_translation_status: str
+    zh_translation_error: str | None = None
     zh_translation_started_at: str | None = None
     zh_translation_finished_at: str | None = None
+    export_status: str
+    export_error: str | None = None
+    export_started_at: str | None = None
+    export_finished_at: str | None = None
+    last_error_message: str | None = None
     pdf_url: str
     elements: List[ElementResponse]
 
@@ -43,6 +83,11 @@ class PaperProcessResponse(BaseModel):
     original_filename: str
     stored_file_path: str
     parse_status: str
+    parse_error: str | None = None
+    parse_started_at: str | None = None
+    parse_finished_at: str | None = None
+    overview_status: str
+    overview_error: str | None = None
     paragraphs: list[ParagraphResult]
 
 
@@ -51,6 +96,20 @@ class UploadResponse(BaseModel):
     title: str | None
     original_filename: str
     parse_status: str
+    parse_error: str | None = None
+    parse_started_at: str | None = None
+    parse_finished_at: str | None = None
+    overview_status: str
+    overview_error: str | None = None
+    overview_started_at: str | None = None
+    overview_finished_at: str | None = None
+    zh_translation_status: str | None = None
+    zh_translation_error: str | None = None
+    export_status: str | None = None
+    export_error: str | None = None
+    export_started_at: str | None = None
+    export_finished_at: str | None = None
+    last_error_message: str | None = None
     pdf_url: str
     elements: List[ElementResponse]
 

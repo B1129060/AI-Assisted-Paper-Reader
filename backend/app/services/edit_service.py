@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.paper_overview import PaperOverview
+from app.models.highlight import TextHighlight
 
 
 client_kwargs: Dict[str, Any] = {
@@ -69,6 +70,62 @@ def make_section_key(section_title: str) -> str:
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", "_", text).strip("_")
     return text
+
+
+def _parse_json_list(raw: str | None) -> list:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def remove_section_summary_from_overview(
+    db: Session,
+    paper_id: int,
+    section_title: str | None,
+) -> None:
+    """
+    Remove a section summary when the section no longer has paragraph/bullet
+    content. Because section_summary highlights are stored by item_index, all
+    section_summary highlights for this paper are cleared after removing an
+    item to avoid index mismatch.
+    """
+    if not section_title:
+        return
+
+    overview = db.query(PaperOverview).filter(PaperOverview.paper_id == paper_id).first()
+    if not overview:
+        return
+
+    target_key = make_section_key(section_title)
+
+    def remove_from_raw(raw: str | None) -> str:
+        items = _parse_json_list(raw)
+        kept = []
+        for item in items:
+            if not isinstance(item, dict):
+                kept.append(item)
+                continue
+            item_key = item.get("section_key") or make_section_key(item.get("section_title"))
+            if item_key != target_key:
+                kept.append(item)
+        return json.dumps(kept, ensure_ascii=False)
+
+    overview.section_summaries = remove_from_raw(overview.section_summaries)
+    overview.section_summaries_zh = remove_from_raw(overview.section_summaries_zh)
+
+    (
+        db.query(TextHighlight)
+        .filter(
+            TextHighlight.paper_id == paper_id,
+            TextHighlight.scope == "overview",
+            TextHighlight.field_name == "section_summary",
+        )
+        .delete(synchronize_session=False)
+    )
 
 
 def regenerate_paragraph_fields(text: str) -> dict:

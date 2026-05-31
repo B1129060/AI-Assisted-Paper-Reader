@@ -225,6 +225,95 @@ SOURCE:
 """.strip()
 
 
+
+def _fallback_overview(elements: List[dict]) -> dict:
+    """
+    Deterministic fallback used when the LLM returns invalid JSON or an incomplete
+    overview. It uses paragraph-level summaries/key points that already exist in
+    the database, so the paper-level overview never becomes an empty successful
+    result.
+    """
+    evidence_items: List[dict] = []
+    current_section = ""
+
+    for el in elements:
+        el_type = el.get("type")
+
+        if el_type == "heading":
+            heading = str(el.get("text") or "").strip()
+            if heading:
+                current_section = heading
+            continue
+
+        if el_type not in ("paragraph", "bullet_list"):
+            continue
+
+        element_id = el.get("id")
+        summary = str(el.get("summary") or "").strip()
+        key_points = [str(kp).strip() for kp in (el.get("key_points") or []) if str(kp).strip()]
+
+        if not summary and not key_points:
+            continue
+
+        evidence_items.append({
+            "element_id": element_id,
+            "section_title": current_section,
+            "summary": summary,
+            "key_points": key_points,
+        })
+
+    summary_parts = [item["summary"] for item in evidence_items if item["summary"]]
+    overall_summary = " ".join(summary_parts[:3]).strip()
+    if len(overall_summary) > 1200:
+        overall_summary = overall_summary[:1200].rsplit(" ", 1)[0].strip() + "."
+
+    overall_key_points: List[str] = []
+    for item in evidence_items:
+        for kp in item["key_points"]:
+            if kp not in overall_key_points:
+                overall_key_points.append(kp)
+            if len(overall_key_points) >= 5:
+                break
+        if len(overall_key_points) >= 5:
+            break
+
+    if len(overall_key_points) < 3:
+        for summary in summary_parts:
+            if summary and summary not in overall_key_points:
+                overall_key_points.append(summary)
+            if len(overall_key_points) >= 3:
+                break
+
+    highlight_summaries: List[dict] = []
+    highlight_element_ids: List[int] = []
+    for item in evidence_items:
+        summary = item["summary"]
+        if not summary:
+            continue
+
+        try:
+            element_id = int(item["element_id"])
+        except Exception:
+            continue
+
+        title = item["section_title"] or f"Element {element_id}"
+        highlight_element_ids.append(element_id)
+        highlight_summaries.append({
+            "element_id": element_id,
+            "title": title[:120],
+            "summary": summary,
+        })
+
+        if len(highlight_summaries) >= 5:
+            break
+
+    return {
+        "overall_summary": overall_summary,
+        "overall_key_points": overall_key_points[:5],
+        "highlight_element_ids": highlight_element_ids,
+        "highlight_summaries": highlight_summaries,
+    }
+
 def generate_overview(elements: List[dict]) -> dict:
     data = _call_json_llm(_build_overview_prompt(elements))
 
@@ -263,12 +352,30 @@ def generate_overview(elements: List[dict]) -> dict:
             "summary": summary,
         })
 
-    return {
+    result = {
         "overall_summary": overall_summary,
         "overall_key_points": overall_key_points,
         "highlight_element_ids": highlight_element_ids,
         "highlight_summaries": highlight_summaries,
     }
+
+    fallback = _fallback_overview(elements)
+
+    if not result["overall_summary"]:
+        result["overall_summary"] = fallback["overall_summary"]
+
+    if not result["overall_key_points"]:
+        result["overall_key_points"] = fallback["overall_key_points"]
+
+    if not result["highlight_summaries"]:
+        result["highlight_summaries"] = fallback["highlight_summaries"]
+        result["highlight_element_ids"] = fallback["highlight_element_ids"]
+    elif not result["highlight_element_ids"]:
+        result["highlight_element_ids"] = [
+            item["element_id"] for item in result["highlight_summaries"]
+        ]
+
+    return result
 
 
 def _group_main_sections(elements: List[dict]) -> List[dict]:
@@ -347,11 +454,8 @@ def generate_section_summaries(elements: List[dict]) -> List[dict]:
         section_title = sec["section_title"]
         sec_elements = sec["elements"]
 
-        try:
-            data = _call_json_llm(_build_section_prompt(section_title, sec_elements))
-            summary = str(data.get("summary", "")).strip()
-        except Exception:
-            summary = ""
+        data = _call_json_llm(_build_section_prompt(section_title, sec_elements))
+        summary = str(data.get("summary", "")).strip()
 
         if not summary:
             collected = []
@@ -373,15 +477,44 @@ def generate_section_summaries(elements: List[dict]) -> List[dict]:
     return outputs
 
 
-def generate_abstract_summary(elements: List[dict]) -> str:
-    abstract_elements: List[dict] = []
+def _element_has_text_evidence(el: dict) -> bool:
+    if (el.get("summary") or "").strip():
+        return True
+
+    key_points = el.get("key_points") or []
+    if any(str(kp).strip() for kp in key_points):
+        return True
+
+    if (el.get("text") or "").strip():
+        return True
+
+    if (el.get("intro_text") or "").strip():
+        return True
+
+    items = el.get("items") or []
+    return any(str(item).strip() for item in items)
+
+
+def _is_abstract_heading_text(text: str) -> bool:
+    normalized = re.sub(r"[^a-z]", "", (text or "").lower())
+    return normalized == "abstract" or normalized.startswith("abstract")
+
+
+def _collect_abstract_candidates(elements: List[dict]) -> List[dict]:
+    """
+    The parser does not always emit an exact heading with text == ABSTRACT.
+    This collector therefore tries several safe signals before falling back to
+    the first evidence-bearing paragraphs, so regenerate does not get stuck
+    forever with an empty abstract_summary.
+    """
+    candidates: List[dict] = []
     in_abstract = False
 
     for el in elements:
         if el.get("type") == "heading":
             text = (el.get("text") or "").strip()
 
-            if text.upper() == "ABSTRACT":
+            if _is_abstract_heading_text(text):
                 in_abstract = True
                 continue
 
@@ -389,27 +522,107 @@ def generate_abstract_summary(elements: List[dict]) -> str:
                 break
 
         if in_abstract and el.get("type") in ("paragraph", "bullet_list"):
-            abstract_elements.append(el)
+            if _element_has_text_evidence(el):
+                candidates.append(el)
 
-    if not abstract_elements:
-        return ""
+    if candidates:
+        return candidates
 
+    for el in elements:
+        if el.get("type") not in ("paragraph", "bullet_list"):
+            continue
+
+        section_title = str(el.get("section_title") or "")
+        if "abstract" in section_title.lower() and _element_has_text_evidence(el):
+            candidates.append(el)
+
+    if candidates:
+        return candidates
+
+    fallback: List[dict] = []
+    for el in elements:
+        if el.get("type") not in ("paragraph", "bullet_list"):
+            continue
+        if not _element_has_text_evidence(el):
+            continue
+
+        fallback.append(el)
+        if len(fallback) >= 3:
+            break
+
+    return fallback
+
+
+def _build_abstract_source(abstract_elements: List[dict]) -> str:
     parts: List[str] = []
+
     for el in abstract_elements:
         s = (el.get("summary") or "").strip()
         if s:
             parts.append(f"[SUMMARY] {s}")
+
         for kp in el.get("key_points") or []:
             kp = str(kp).strip()
             if kp:
                 parts.append(f"[KEYPOINT] {kp}")
 
-    source = "\n".join(parts)
+        if not s and not el.get("key_points"):
+            text = (el.get("text") or el.get("intro_text") or "").strip()
+            if text:
+                parts.append(f"[TEXT] {text[:1200]}")
+
+            for item in el.get("items") or []:
+                item_text = str(item).strip()
+                if item_text:
+                    parts.append(f"[ITEM] {item_text[:800]}")
+
+    return "\n".join(parts)
+
+
+def _fallback_abstract_summary(abstract_elements: List[dict], all_elements: List[dict]) -> str:
+    collected: List[str] = []
+
+    for source_elements in (abstract_elements, all_elements):
+        for el in source_elements:
+            if el.get("type") not in ("paragraph", "bullet_list"):
+                continue
+
+            summary = (el.get("summary") or "").strip()
+            if summary:
+                collected.append(summary)
+            else:
+                text = (el.get("text") or el.get("intro_text") or "").strip()
+                if text:
+                    collected.append(text[:500])
+
+            if len(collected) >= 2:
+                break
+
+        if collected:
+            break
+
+    summary = " ".join(collected).strip()
+    if len(summary) > 1200:
+        summary = summary[:1200].rsplit(" ", 1)[0].strip() + "."
+
+    return summary
+
+
+def generate_abstract_summary(elements: List[dict]) -> str:
+    abstract_elements = _collect_abstract_candidates(elements)
+
+    if not abstract_elements:
+        return _fallback_abstract_summary([], elements)
+
+    source = _build_abstract_source(abstract_elements)
+
+    if not source.strip():
+        return _fallback_abstract_summary(abstract_elements, elements)
 
     prompt = f"""
-You are summarizing the ABSTRACT section of a scientific paper.
+You are summarizing the abstract or opening evidence of a scientific paper.
 
-Write ONE concise abstract summary using only the provided evidence.
+Write ONE concise abstract-style summary using only the provided evidence.
 
 Return ONLY valid JSON in this format:
 {{
@@ -420,20 +633,9 @@ SOURCE:
 {source}
 """.strip()
 
-    try:
-        data = _call_json_llm(prompt)
-        summary = str(data.get("summary", "")).strip()
-        if summary:
-            return summary
-    except Exception:
-        pass
+    data = _call_json_llm(prompt)
+    summary = str(data.get("summary", "")).strip()
+    if summary:
+        return summary
 
-    collected = []
-    for el in abstract_elements:
-        s = (el.get("summary") or "").strip()
-        if s:
-            collected.append(s)
-        if len(collected) >= 2:
-            break
-
-    return " ".join(collected).strip()
+    return _fallback_abstract_summary(abstract_elements, elements)

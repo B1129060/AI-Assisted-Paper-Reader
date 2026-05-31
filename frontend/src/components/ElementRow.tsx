@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type MouseEvent, type RefObject } from "react";
 import type { Element } from "../types/paper";
 import type { HighlightColor, TextHighlight } from "../types/highlight";
 import HighlightableText from "./HighlightableText";
@@ -6,6 +6,7 @@ import HighlightableText from "./HighlightableText";
 type Props = {
   paperId: number;
   element: Element;
+  hoverElement?: Element | null;
   headingRef?: RefObject<HTMLDivElement | null>;
   currentLanguage: "en" | "zh";
   highlightColor: HighlightColor;
@@ -20,11 +21,21 @@ type Props = {
   flashToken?: number;
   isFlashing?: boolean;
   textHighlightMode: boolean;
+  editDisabled?: boolean;
+};
+
+type ElementWithZh = Element & {
+  text_zh?: string | null;
+  summary_zh?: string | null;
+  key_points_zh?: string[] | null;
+  intro_text_zh?: string | null;
+  items_zh?: string[] | null;
 };
 
 export default function ElementRow({
   paperId,
   element,
+  hoverElement = null,
   headingRef,
   currentLanguage,
   highlightColor,
@@ -39,6 +50,7 @@ export default function ElementRow({
   isFlashing,
   flashToken,
   textHighlightMode,
+  editDisabled = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draftText, setDraftText] = useState(element.text || "");
@@ -48,6 +60,7 @@ export default function ElementRow({
   const [showInsertBox, setShowInsertBox] = useState(false);
   const [insertText, setInsertText] = useState("");
   const [showFlash, setShowFlash] = useState(false);
+  const [deleteConfirmType, setDeleteConfirmType] = useState<"paragraph" | "bullet_list" | null>(null);
 
   useEffect(() => {
     setDraftText(element.text || "");
@@ -67,6 +80,14 @@ export default function ElementRow({
     return () => window.clearTimeout(timer);
   }, [isFlashing, flashToken]);
 
+  useEffect(() => {
+    if (!editDisabled) return;
+
+    setEditing(false);
+    setShowInsertBox(false);
+    setDeleteConfirmType(null);
+  }, [editDisabled]);
+
   if (element.type === "heading" && element.level !== "section") {
     return null;
   }
@@ -81,7 +102,23 @@ export default function ElementRow({
     );
   }
 
-  const canEdit = currentLanguage === "en";
+  const canEdit = currentLanguage === "en" && !editDisabled;
+  const elementWithZh = element as ElementWithZh;
+  const hoverElementWithZh = hoverElement as ElementWithZh | null;
+
+  function getHoverTranslation(primary?: string | null, fallback?: string | null) {
+    if (currentLanguage !== "en") return null;
+    return primary || fallback || null;
+  }
+
+  function getHoverTranslationItem(
+    primaryValues: string[] | null | undefined,
+    fallbackValues: string[] | null | undefined,
+    index: number
+  ) {
+    if (currentLanguage !== "en") return null;
+    return primaryValues?.[index] || fallbackValues?.[index] || null;
+  }
 
   function handleRowClick() {
     const selected = window.getSelection()?.toString().trim();
@@ -121,7 +158,47 @@ export default function ElementRow({
     setDraftItems((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function getDisplayIntroText() {
+    if (currentLanguage === "zh") {
+      return (
+        elementWithZh.intro_text_zh ||
+        hoverElementWithZh?.intro_text ||
+        element.intro_text ||
+        ""
+      );
+    }
+
+    return element.intro_text || "";
+  }
+
+  function openDeleteConfirm(
+    e: MouseEvent<HTMLButtonElement>,
+    type: "paragraph" | "bullet_list"
+  ) {
+    e.stopPropagation();
+    setDeleteConfirmType(type);
+  }
+
+  async function confirmDeleteElement() {
+    try {
+      setSaving(true);
+      await onDeleteParagraph(element.paragraph_id);
+      setDeleteConfirmType(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const displayIntroText = getDisplayIntroText();
+  const deleteTitle =
+    deleteConfirmType === "bullet_list" ? "刪除條列段落" : "刪除段落";
+  const deleteMessage =
+    deleteConfirmType === "bullet_list"
+      ? "是否確定要刪除此條列段落？"
+      : "是否確定要刪除此段落？";
+
   return (
+    <>
     <div
       className={`row content-row ${showFlash ? "active-row" : ""}`}
       data-paragraph-id={element.paragraph_id}
@@ -141,6 +218,7 @@ export default function ElementRow({
                 itemIndex={idx}
                 language={currentLanguage}
                 text={kp}
+                hoverTranslation={getHoverTranslationItem(hoverElementWithZh?.key_points, elementWithZh.key_points_zh, idx)}
                 color={highlightColor}
                 highlights={textHighlights}
                 enabled={textHighlightMode}
@@ -163,6 +241,7 @@ export default function ElementRow({
             fieldName="summary"
             language={currentLanguage}
             text={element.summary}
+            hoverTranslation={getHoverTranslation(hoverElementWithZh?.summary, elementWithZh.summary_zh)}
             color={highlightColor}
             highlights={textHighlights}
             enabled={textHighlightMode}
@@ -191,7 +270,7 @@ export default function ElementRow({
                       e.stopPropagation();
                       void saveParagraphEdit();
                     }}
-                    disabled={saving}
+                    disabled={saving || editDisabled}
                   >
                     {saving ? "Saving..." : "Save"}
                   </button>
@@ -201,7 +280,7 @@ export default function ElementRow({
                       setDraftText(element.text || "");
                       setEditing(false);
                     }}
-                    disabled={saving}
+                    disabled={saving || editDisabled}
                   >
                     Cancel
                   </button>
@@ -216,6 +295,7 @@ export default function ElementRow({
                   fieldName="text"
                   language={currentLanguage}
                   text={element.text || "—"}
+                  hoverTranslation={getHoverTranslation(hoverElementWithZh?.text, elementWithZh.text_zh)}
                   color={highlightColor}
                   highlights={textHighlights}
                   enabled={textHighlightMode}
@@ -246,7 +326,7 @@ export default function ElementRow({
                             setSaving(false);
                           }
                         }}
-                        disabled={saving}
+                        disabled={saving || editDisabled}
                       >
                         {saving ? "Adding..." : "Add below"}
                       </button>
@@ -255,7 +335,7 @@ export default function ElementRow({
                           setInsertText("");
                           setShowInsertBox(false);
                         }}
-                        disabled={saving}
+                        disabled={saving || editDisabled}
                       >
                         Cancel
                       </button>
@@ -282,19 +362,8 @@ export default function ElementRow({
                       {showInsertBox ? "Close insert" : "Insert below"}
                     </button>
                     <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const ok = window.confirm("Delete this paragraph?");
-                        if (!ok) return;
-
-                        try {
-                          setSaving(true);
-                          await onDeleteParagraph(element.paragraph_id);
-                        } finally {
-                          setSaving(false);
-                        }
-                      }}
-                      disabled={saving}
+                      onClick={(e) => openDeleteConfirm(e, "paragraph")}
+                      disabled={saving || editDisabled}
                     >
                       Delete
                     </button>
@@ -313,7 +382,7 @@ export default function ElementRow({
                 onClick={(e) => e.stopPropagation()}
               >
                 <textarea
-                                 className="edit-textarea"
+                  className="edit-textarea"
                   value={draftIntroText}
                   onChange={(e) => setDraftIntroText(e.target.value)}
                   placeholder="Intro text"
@@ -333,7 +402,7 @@ export default function ElementRow({
                           e.stopPropagation();
                           removeItem(idx);
                         }}
-                        disabled={saving}
+                        disabled={saving || editDisabled}
                       >
                         Delete
                       </button>
@@ -347,7 +416,7 @@ export default function ElementRow({
                       e.stopPropagation();
                       addItem();
                     }}
-                    disabled={saving}
+                    disabled={saving || editDisabled}
                   >
                     Add item
                   </button>
@@ -356,7 +425,7 @@ export default function ElementRow({
                       e.stopPropagation();
                       void saveBulletEdit();
                     }}
-                    disabled={saving}
+                    disabled={saving || editDisabled}
                   >
                     {saving ? "Saving..." : "Save"}
                   </button>
@@ -367,7 +436,7 @@ export default function ElementRow({
                       setDraftItems(element.items || []);
                       setEditing(false);
                     }}
-                    disabled={saving}
+                    disabled={saving || editDisabled}
                   >
                     Cancel
                   </button>
@@ -375,7 +444,7 @@ export default function ElementRow({
               </div>
             ) : (
               <>
-                {element.intro_text && (
+                {displayIntroText && (
                   <div className="bullet-intro">
                     <HighlightableText
                       paperId={paperId}
@@ -383,7 +452,8 @@ export default function ElementRow({
                       scope="paragraph"
                       fieldName="intro_text"
                       language={currentLanguage}
-                      text={element.intro_text}
+                      text={displayIntroText}
+                      hoverTranslation={getHoverTranslation(hoverElementWithZh?.intro_text, elementWithZh.intro_text_zh)}
                       color={highlightColor}
                       highlights={textHighlights}
                       enabled={textHighlightMode}
@@ -404,6 +474,7 @@ export default function ElementRow({
                         itemIndex={idx}
                         language={currentLanguage}
                         text={item}
+                        hoverTranslation={getHoverTranslationItem(hoverElementWithZh?.items, elementWithZh.items_zh, idx)}
                         color={highlightColor}
                         highlights={textHighlights}
                         enabled={textHighlightMode}
@@ -437,7 +508,7 @@ export default function ElementRow({
                             setSaving(false);
                           }
                         }}
-                        disabled={saving}
+                        disabled={saving || editDisabled}
                       >
                         {saving ? "Adding..." : "Add below"}
                       </button>
@@ -446,7 +517,7 @@ export default function ElementRow({
                           setInsertText("");
                           setShowInsertBox(false);
                         }}
-                        disabled={saving}
+                        disabled={saving || editDisabled}
                       >
                         Cancel
                       </button>
@@ -475,19 +546,8 @@ export default function ElementRow({
                     </button>
 
                     <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const ok = window.confirm("Delete this bullet list?");
-                        if (!ok) return;
-
-                        try {
-                          setSaving(true);
-                          await onDeleteParagraph(element.paragraph_id);
-                        } finally {
-                          setSaving(false);
-                        }
-                      }}
-                      disabled={saving}
+                      onClick={(e) => openDeleteConfirm(e, "bullet_list")}
+                      disabled={saving || editDisabled}
                     >
                       Delete
                     </button>
@@ -499,6 +559,43 @@ export default function ElementRow({
         )}
       </div>
     </div>
+
+    {deleteConfirmType && (
+      <div
+        className="modal-backdrop"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!saving) setDeleteConfirmType(null);
+        }}
+      >
+        <div
+          className="confirm-modal inline-confirm-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2>{deleteTitle}</h2>
+          <p>{deleteMessage}</p>
+          <p className="confirm-warning">這個操作無法復原。</p>
+
+          <div className="confirm-modal-actions">
+            <button
+              className="modal-secondary-button"
+              onClick={() => setDeleteConfirmType(null)}
+              disabled={saving || editDisabled}
+            >
+              Cancel
+            </button>
+            <button
+              className="danger-button"
+              onClick={() => void confirmDeleteElement()}
+              disabled={saving || editDisabled}
+            >
+              {saving ? "Deleting..." : "Confirm Delete"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
-           
+

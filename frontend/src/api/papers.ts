@@ -1,11 +1,35 @@
 import type { PaperDetail, PaperListItem } from "../types/paper";
 
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "./apiConfig";
+
+async function getErrorMessage(res: Response, fallback: string) {
+  try {
+    const data = await res.json();
+    if (typeof data?.detail === "string") {
+      return data.detail;
+    }
+    if (Array.isArray(data?.detail)) {
+      return data.detail
+        .map((item: unknown) => {
+          if (typeof item === "object" && item !== null && "msg" in item) {
+            const msg = (item as { msg?: unknown }).msg;
+            return typeof msg === "string" ? msg : String(msg);
+          }
+
+          return String(item);
+        })
+        .join("; ");
+    }
+  } catch {
+    // Ignore JSON parse errors and use fallback.
+  }
+  return fallback;
+}
 
 export async function fetchPapers(): Promise<PaperListItem[]> {
   const res = await fetch(`${API_BASE}/papers/`);
   if (!res.ok) {
-    throw new Error("Failed to fetch papers");
+    throw new Error(await getErrorMessage(res, "Failed to fetch papers"));
   }
   return res.json();
 }
@@ -16,12 +40,17 @@ export async function fetchPaperDetail(
 ): Promise<PaperDetail> {
   const res = await fetch(`${API_BASE}/papers/${paperId}?lang=${lang}`);
   if (!res.ok) {
-    throw new Error("Failed to fetch paper detail");
+    throw new Error(await getErrorMessage(res, "Failed to fetch paper detail"));
   }
   return res.json();
 }
 
-export async function uploadPaper(file: File): Promise<{ paper_id: number; parse_status: string }> {
+export async function uploadPaper(file: File): Promise<{
+  paper_id: number;
+  parse_status: string;
+  overview_status?: string;
+  last_error_message?: string | null;
+}> {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -31,7 +60,7 @@ export async function uploadPaper(file: File): Promise<{ paper_id: number; parse
   });
 
   if (!res.ok) {
-    throw new Error("Failed to upload paper");
+    throw new Error(await getErrorMessage(res, "Failed to upload paper"));
   }
 
   return res.json();
@@ -45,7 +74,7 @@ export async function translatePaperToZh(
   });
 
   if (!res.ok) {
-    throw new Error("Failed to translate paper to Chinese");
+    throw new Error(await getErrorMessage(res, "Failed to translate paper to Chinese"));
   }
 
   return res.json();
@@ -55,7 +84,7 @@ export async function updateParagraph(
   paragraphId: number,
   text: string
 ): Promise<{ paragraph_id: number; paper_id: number; section_title: string | null; status: string }> {
-  const res = await fetch(`http://127.0.0.1:8000/paragraphs/${paragraphId}`, {
+  const res = await fetch(`${API_BASE}/paragraphs/${paragraphId}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -64,7 +93,7 @@ export async function updateParagraph(
   });
 
   if (!res.ok) {
-    throw new Error("Failed to update paragraph");
+    throw new Error(await getErrorMessage(res, "Failed to update paragraph"));
   }
 
   return res.json();
@@ -75,7 +104,7 @@ export async function updateBulletList(
   introText: string,
   items: string[]
 ): Promise<{ paragraph_id: number; paper_id: number; section_title: string | null; status: string }> {
-  const res = await fetch(`http://127.0.0.1:8000/paragraphs/${paragraphId}/bullet-list`, {
+  const res = await fetch(`${API_BASE}/paragraphs/${paragraphId}/bullet-list`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -87,7 +116,7 @@ export async function updateBulletList(
   });
 
   if (!res.ok) {
-    throw new Error("Failed to update bullet list");
+    throw new Error(await getErrorMessage(res, "Failed to update bullet list"));
   }
 
   return res.json();
@@ -97,7 +126,7 @@ export async function insertParagraphAfter(
   paragraphId: number,
   text: string
 ): Promise<{ paragraph_id: number; paper_id: number; section_title: string | null; status: string }> {
-  const res = await fetch(`http://127.0.0.1:8000/paragraphs/${paragraphId}/insert-after`, {
+  const res = await fetch(`${API_BASE}/paragraphs/${paragraphId}/insert-after`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -106,7 +135,7 @@ export async function insertParagraphAfter(
   });
 
   if (!res.ok) {
-    throw new Error("Failed to insert paragraph");
+    throw new Error(await getErrorMessage(res, "Failed to insert paragraph"));
   }
 
   return res.json();
@@ -115,12 +144,89 @@ export async function insertParagraphAfter(
 export async function deleteParagraph(
   paragraphId: number
 ): Promise<{ paragraph_id: number; paper_id: number; section_title: string | null; status: string }> {
-  const res = await fetch(`http://127.0.0.1:8000/paragraphs/${paragraphId}`, {
+  const res = await fetch(`${API_BASE}/paragraphs/${paragraphId}`, {
     method: "DELETE",
   });
 
   if (!res.ok) {
-    throw new Error("Failed to delete paragraph");
+    throw new Error(await getErrorMessage(res, "Failed to delete paragraph"));
+  }
+
+  return res.json();
+}
+
+export type ExportOptions = {
+  include_pdf: boolean;
+  include_overview: boolean;
+  include_paragraphs: boolean;
+  language_mode: "en" | "zh" | "both";
+  include_pdf_highlights: boolean;
+  include_text_highlights: boolean;
+};
+
+export async function exportPaper(
+  paperId: number,
+  options: ExportOptions
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${API_BASE}/papers/${paperId}/export`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(options),
+  });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to export paper"));
+  }
+
+  const blob = await res.blob();
+
+  const contentDisposition = res.headers.get("Content-Disposition") || "";
+  const match = contentDisposition.match(/filename="(.+)"/);
+  const filename = match ? match[1] : "export";
+
+  return { blob, filename };
+}
+
+export async function deletePaper(
+  paperId: number
+): Promise<{
+  message: string;
+  paper_id: number;
+  deleted_pdf: boolean;
+  deleted_debug_files: boolean;
+}> {
+  const res = await fetch(`${API_BASE}/papers/${paperId}/with-file`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to delete paper"));
+  }
+
+  return res.json();
+}
+
+export async function updatePaperTitle(
+  paperId: number,
+  title: string
+): Promise<{
+  paper_id: number;
+  title: string;
+  original_filename: string;
+  message: string;
+}> {
+  const res = await fetch(`${API_BASE}/papers/${paperId}/title`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to update paper title"));
   }
 
   return res.json();

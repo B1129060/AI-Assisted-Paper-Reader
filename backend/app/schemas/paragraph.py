@@ -27,6 +27,7 @@ class ParagraphResult(BaseModel):
 
     # list only
     intro_text: Optional[str] = None
+    intro_text_zh: Optional[str] = None
     items: Optional[List[str]] = None
 
     # PDF 定位資訊
@@ -48,6 +49,7 @@ class ElementResponse(BaseModel):
 
     level: Optional[str] = None
     intro_text: Optional[str] = None
+    intro_text_zh: Optional[str] = None
     items: Optional[List[str]] = None
 
     # PDF 定位資訊

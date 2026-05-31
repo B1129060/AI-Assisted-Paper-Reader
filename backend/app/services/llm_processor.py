@@ -6,6 +6,7 @@ import time
 from openai import OpenAI
 
 from app.config import settings
+from app.services.task_service import classify_task_error
 
 
 client_kwargs: Dict[str, Any] = {
@@ -397,12 +398,24 @@ def _call_llm(prompt: str, chunk_index: int) -> Tuple[dict, dict]:
             return _extract_json_object(content), usage
 
         except Exception as e:
+            user_message, retryable = classify_task_error(e)
+
+            if not retryable:
+                print(
+                    f"[LLM][ERROR] chunk={chunk_index} "
+                    f"non_retryable=true error={type(e).__name__}: {e}"
+                )
+                raise
+
             if attempt < max_attempts:
                 time.sleep(1.0 * attempt)
                 continue
 
-            print(f"[LLM][ERROR] chunk={chunk_index} error={type(e).__name__}: {e}")
-            return {"elements": []}, _empty_usage()
+            print(
+                f"[LLM][ERROR] chunk={chunk_index} "
+                f"retryable=true attempts={max_attempts} error={type(e).__name__}: {e}"
+            )
+            raise
 
 
 def process_chunk_with_llm(

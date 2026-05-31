@@ -3,9 +3,22 @@ export type PaperListItem = {
   title: string | null;
   original_filename: string;
   parse_status: string;
+  parse_error?: string | null;
+  parse_started_at?: string | null;
+  parse_finished_at?: string | null;
+  overview_status: string;
+  overview_error?: string | null;
+  overview_started_at?: string | null;
+  overview_finished_at?: string | null;
   zh_translation_status: string;
+  zh_translation_error?: string | null;
   zh_translation_started_at?: string | null;
   zh_translation_finished_at?: string | null;
+  export_status?: string | null;
+  export_error?: string | null;
+  export_started_at?: string | null;
+  export_finished_at?: string | null;
+  last_error_message?: string | null;
 };
 
 export type PdfLocation = {
@@ -18,9 +31,22 @@ export type PaperDetail = {
   title: string | null;
   original_filename: string;
   parse_status: string;
+  parse_error?: string | null;
+  parse_started_at?: string | null;
+  parse_finished_at?: string | null;
+  overview_status: string;
+  overview_error?: string | null;
+  overview_started_at?: string | null;
+  overview_finished_at?: string | null;
   zh_translation_status: string;
+  zh_translation_error?: string | null;
   zh_translation_started_at?: string | null;
   zh_translation_finished_at?: string | null;
+  export_status?: string | null;
+  export_error?: string | null;
+  export_started_at?: string | null;
+  export_finished_at?: string | null;
+  last_error_message?: string | null;
   pdf_url: string;
   elements: Element[];
 };

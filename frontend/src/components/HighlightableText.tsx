@@ -1,4 +1,11 @@
-import { useMemo } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { createTextHighlight, deleteTextHighlight } from "../api/highlights";
 import type { HighlightColor, TextHighlight } from "../types/highlight";
 
@@ -13,6 +20,8 @@ type Props = {
   color: HighlightColor;
   highlights: TextHighlight[];
   enabled?: boolean;
+  hoverTranslation?: string | string[] | null;
+  hoverDelayMs?: number;
   onCreated: (highlight: TextHighlight) => void;
   onDeleted: (highlightId: number) => void;
 };
@@ -20,6 +29,25 @@ type Props = {
 type Segment =
   | { type: "plain"; text: string }
   | { type: "highlight"; text: string; highlight: TextHighlight };
+
+type TranslationPopoverStyle = CSSProperties & {
+  "--translation-arrow-left"?: string;
+};
+
+function normalizeHoverTranslation(
+  hoverTranslation?: string | string[] | null
+): string | null {
+  if (Array.isArray(hoverTranslation)) {
+    const text = hoverTranslation
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join("\n");
+    return text || null;
+  }
+
+  const text = hoverTranslation?.trim();
+  return text || null;
+}
 
 export default function HighlightableText({
   paperId,
@@ -32,9 +60,26 @@ export default function HighlightableText({
   color,
   highlights,
   enabled = false,
+  hoverTranslation = null,
+  hoverDelayMs = 1200,
   onCreated,
   onDeleted,
 }: Props) {
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translationPopoverStyle, setTranslationPopoverStyle] =
+    useState<TranslationPopoverStyle>({});
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+  const openTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const normalizedHoverTranslation = useMemo(
+    () => normalizeHoverTranslation(hoverTranslation),
+    [hoverTranslation]
+  );
+
+  const canShowTranslation =
+    language === "en" && !enabled && Boolean(normalizedHoverTranslation);
+
   const relevantHighlights = useMemo(() => {
     return highlights
       .filter(
@@ -102,6 +147,133 @@ export default function HighlightableText({
     return result;
   }, [text, normalizedHighlights]);
 
+  useEffect(() => {
+    return () => {
+      if (openTimerRef.current) {
+        window.clearTimeout(openTimerRef.current);
+      }
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setShowTranslation(false);
+    if (openTimerRef.current) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, [text, normalizedHoverTranslation, language, enabled]);
+
+  useEffect(() => {
+    if (!showTranslation) return;
+
+    updateTranslationPopoverLayout();
+
+    window.addEventListener("resize", updateTranslationPopoverLayout);
+    return () => {
+      window.removeEventListener("resize", updateTranslationPopoverLayout);
+    };
+  }, [showTranslation]);
+
+  function clearOpenTimer() {
+    if (openTimerRef.current) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+  }
+
+  function clearCloseTimer() {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  function scheduleShowTranslation() {
+    if (!canShowTranslation) return;
+
+    clearOpenTimer();
+    clearCloseTimer();
+
+    openTimerRef.current = window.setTimeout(() => {
+      updateTranslationPopoverLayout();
+      setShowTranslation(true);
+      openTimerRef.current = null;
+    }, hoverDelayMs);
+  }
+
+  function scheduleHideTranslation() {
+    clearOpenTimer();
+    clearCloseTimer();
+
+    closeTimerRef.current = window.setTimeout(() => {
+      setShowTranslation(false);
+      closeTimerRef.current = null;
+    }, 140);
+  }
+
+  function keepTranslationVisible() {
+    if (!canShowTranslation) return;
+    clearOpenTimer();
+    clearCloseTimer();
+    updateTranslationPopoverLayout();
+    setShowTranslation(true);
+  }
+
+  function findPopoverBoundary(wrapper: HTMLElement): HTMLElement | null {
+    return wrapper.closest<HTMLElement>(
+      ".reader-left, .overview-panel, .reader-grid, .content-row"
+    );
+  }
+
+  function updateTranslationPopoverLayout() {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const boundary = findPopoverBoundary(wrapper);
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const boundaryRect = boundary?.getBoundingClientRect();
+
+    const safeGap = 18;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+
+    const leftBoundary = boundaryRect ? boundaryRect.left + safeGap : safeGap;
+    const rightBoundary = boundaryRect
+      ? boundaryRect.right - safeGap
+      : viewportWidth - safeGap;
+
+    const boundaryWidth = Math.max(280, rightBoundary - leftBoundary);
+    const preferredWidth = Math.min(760, Math.max(460, boundaryWidth * 0.82));
+    const width = Math.floor(Math.min(preferredWidth, boundaryWidth));
+
+    let leftOffset = 0;
+    const popoverLeft = wrapperRect.left + leftOffset;
+    const popoverRight = popoverLeft + width;
+
+    if (popoverRight > rightBoundary) {
+      leftOffset -= popoverRight - rightBoundary;
+    }
+
+    if (wrapperRect.left + leftOffset < leftBoundary) {
+      leftOffset += leftBoundary - (wrapperRect.left + leftOffset);
+    }
+
+    const arrowLeft = Math.max(18, Math.min(width - 18, 18 - leftOffset));
+
+    setTranslationPopoverStyle({
+      width,
+      maxWidth: width,
+      left: leftOffset,
+      "--translation-arrow-left": `${arrowLeft}px`,
+    });
+  }
+
   function getSelectionOffsets(
     container: HTMLElement
   ): { start: number; end: number } | null {
@@ -123,7 +295,7 @@ export default function HighlightableText({
     return { start, end };
   }
 
-  async function handleMouseUp(e: React.MouseEvent<HTMLElement>) {
+  async function handleMouseUp(e: MouseEvent<HTMLElement>) {
     if (!enabled) return;
 
     const container = e.currentTarget;
@@ -132,32 +304,30 @@ export default function HighlightableText({
     if (!text.trim()) return;
 
     const exactMatch = normalizedHighlights.find(
-        (h) =>
-        h.start_offset === offsets.start &&
-        h.end_offset === offsets.end
+      (h) => h.start_offset === offsets.start && h.end_offset === offsets.end
     );
 
     if (exactMatch) {
-        try {
+      try {
         await deleteTextHighlight(exactMatch.id);
         onDeleted(exactMatch.id);
         window.getSelection()?.removeAllRanges();
-        } catch (err) {
+      } catch (err) {
         console.error(err);
-        }
-        return;
+      }
+      return;
     }
 
     const hasOverlap = normalizedHighlights.some(
-        (h) => !(offsets.end <= h.start_offset || offsets.start >= h.end_offset)
+      (h) => !(offsets.end <= h.start_offset || offsets.start >= h.end_offset)
     );
     if (hasOverlap) {
-        window.getSelection()?.removeAllRanges();
-        return;
+      window.getSelection()?.removeAllRanges();
+      return;
     }
 
     try {
-        const created = await createTextHighlight({
+      const created = await createTextHighlight({
         paper_id: paperId,
         paragraph_id: paragraphId,
         scope,
@@ -167,44 +337,58 @@ export default function HighlightableText({
         start_offset: offsets.start,
         end_offset: offsets.end,
         color,
-        });
-        onCreated(created);
-        window.getSelection()?.removeAllRanges();
-    } catch (err) {
-        console.error(err);
-    }
-    }
-
-  async function handleDeleteHighlight(highlightId: number) {
-    try {
-      await deleteTextHighlight(highlightId);
-      onDeleted(highlightId);
+      });
+      onCreated(created);
+      window.getSelection()?.removeAllRanges();
     } catch (err) {
       console.error(err);
     }
   }
 
   return (
-    <span className="highlightable-text" onMouseUp={handleMouseUp}>
-      {segments.map((seg, idx) => {
-        if (seg.type === "plain") {
-          return <span key={idx}>{seg.text}</span>;
-        }
+    <span
+      ref={wrapperRef}
+      className="highlightable-wrapper"
+      onMouseEnter={scheduleShowTranslation}
+      onMouseLeave={scheduleHideTranslation}
+    >
+      <span className="highlightable-text" onMouseUp={handleMouseUp}>
+        {segments.map((seg, idx) => {
+          if (seg.type === "plain") {
+            return <span key={idx}>{seg.text}</span>;
+          }
 
-        return (
-          <mark
-            key={idx}
-            className={`hl-${seg.highlight.color}`}
-            title={
-              enabled
-                ? "Select the same range again to remove highlight"
-                : undefined
-            }
-          >
-            {seg.text}
-          </mark>
-        );
-      })}
+          return (
+            <mark
+              key={idx}
+              className={`hl-${seg.highlight.color}`}
+              title={
+                enabled
+                  ? "Select the same range again to remove highlight"
+                  : undefined
+              }
+            >
+              {seg.text}
+            </mark>
+          );
+        })}
+      </span>
+
+      {showTranslation && normalizedHoverTranslation && (
+        <span
+          className="translation-popover"
+          style={translationPopoverStyle}
+          onMouseEnter={keepTranslationVisible}
+          onMouseLeave={scheduleHideTranslation}
+          onClick={(e) => e.stopPropagation()}
+          role="note"
+        >
+          <span className="translation-popover-label">中文翻譯</span>
+          <span className="translation-popover-content">
+            {normalizedHoverTranslation}
+          </span>
+        </span>
+      )}
     </span>
   );
 }

@@ -1,3 +1,8 @@
+import logging
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.services.pdf_parser import parse_pdf_to_chunks
 from app.services.llm_processor import process_chunk_with_llm
 from app.services.paragraph_builder import build_paragraph_results
@@ -7,9 +12,11 @@ def process_uploaded_paper(
     paper_id: int,
     pdf_path: str,
     original_filename: str,
-    debug: bool = True,
+    debug: bool | None = None,
 ) -> dict:
-    parsed = parse_pdf_to_chunks(pdf_path, debug=debug)
+    debug_enabled = settings.ENABLE_DEBUG_EXPORTS if debug is None else debug
+
+    parsed = parse_pdf_to_chunks(pdf_path, debug=debug_enabled)
     chunks = parsed.get("chunks", [])
     position_data = parsed.get("position_data")
 
@@ -32,11 +39,13 @@ def process_uploaded_paper(
         total_output_tokens += usage["output"]
         total_tokens += usage["total"]
 
-    print("\n====== LLM TOKEN USAGE SUMMARY ======")
-    print(f"Total input tokens:  {total_input_tokens}")
-    print(f"Total output tokens: {total_output_tokens}")
-    print(f"Total tokens:        {total_tokens}")
-    print("====================================\n")
+    logger.info(
+        "LLM token usage summary paper_id=%s input_tokens=%s output_tokens=%s total_tokens=%s",
+        paper_id,
+        total_input_tokens,
+        total_output_tokens,
+        total_tokens,
+    )
 
     # ⭐ 把 position_data 傳進 paragraph_builder
     paragraphs = build_paragraph_results(

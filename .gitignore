@@ -1,111 +1,57 @@
-# =========================
-# Python / FastAPI
-# =========================
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.so
-
-# Virtual environments
-.venv/
 venv/
+.venv/
 env/
 ENV/
 
-# Python packaging / build
-build/
-dist/
-*.egg-info/
-.eggs/
-pip-wheel-metadata/
-
-# Testing / coverage
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-
-# Type checking / lint cache
-.mypy_cache/
-.ruff_cache/
-.pyre/
-.dmypy.json
-dmypy.json
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Logs
-*.log
-
-# =========================
-# Frontend / Node / Vite
-# =========================
+# Node / frontend
 node_modules/
 dist/
 .vite/
-vite.svg
 
-# npm / yarn / pnpm logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# =========================
-# Environment files
-# =========================
+# Environment / secrets
 .env
 .env.*
 !.env.example
+!.env.backend.example
+!.env.frontend.example
 
-# =========================
-# Editor / IDE
-# =========================
-.vscode/
-.idea/
-*.iml
-
-# =========================
-# OS files
-# =========================
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# =========================
-# Runtime / Uploaded / Generated files
-# =========================
+# Runtime files
 uploads/
+logs/
+exports/
+debug_exports/
 tmp/
 temp/
-cache/
-*.tmp
+*.log
 
-# Generated media or local outputs
-output/
-outputs/
-
-# =========================
-# Database / local data
-# =========================
+# Database / dumps
+*.sqlite
 *.sqlite3
 *.db
-
-# PostgreSQL local dumps / backups
-*.sql
 *.dump
+*.sql
+
+# Backups / archives
+*_backup_*/
+backup*/
+backups/
 *.bak
+*.save
+*.zip
+*.tar
+*.tar.gz
 
-# =========================
-# Project-specific optional ignores
-# =========================
-# Put large local sample files here if needed
-# samples/local/
-# assets/local/
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
-# Ignore local test PDFs if you don't want them in repo
-# *.pdf
+# Test cache
+.pytest_cache/
+coverage/

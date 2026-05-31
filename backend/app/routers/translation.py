@@ -1,5 +1,4 @@
-import json
-from datetime import datetime, timedelta, timezone
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -7,50 +6,43 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.paper import Paper
 from app.models.paragraph import Paragraph
+from app.models.user import User
 from app.models.paper_overview import PaperOverview
-from app.services.translation_service import (
-    translate_elements_to_zh,
-    translate_overview_to_zh,
+from app.services.auth_service import get_current_user
+from app.services.ownership_service import get_owned_paper_or_404
+from app.services.resource_guard import ensure_can_start_processing_task
+from app.services.task_service import (
+    TASK_TRANSLATE_ZH,
+    create_translate_zh_task,
+    get_active_task_for_paper,
 )
 
 router = APIRouter(prefix="/papers", tags=["Translation"])
+logger = logging.getLogger(__name__)
 
-TRANSLATION_STALE_MINUTES = 10
 
-
-def _refresh_stale_translation_status(paper: Paper, db: Session) -> None:
-    """
-    如果 paper 卡在 processing 太久，視為失敗。
-    """
-    if paper.zh_translation_status != "processing":
-        return
-
-    if not paper.zh_translation_started_at:
-        paper.zh_translation_status = "failed"
-        db.commit()
-        db.refresh(paper)
-        return
-
-    now = datetime.now(timezone.utc)
-    started_at = paper.zh_translation_started_at
-
-    # 保險：避免 naive/aware 問題
-    if started_at.tzinfo is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
-
-    if now - started_at > timedelta(minutes=TRANSLATION_STALE_MINUTES):
-        paper.zh_translation_status = "failed"
-        db.commit()
-        db.refresh(paper)
+def _has_missing_intro_text_zh(paragraphs: list[Paragraph]) -> bool:
+    return any(
+        p.type == "bullet_list"
+        and bool((p.intro_text or "").strip())
+        and not bool((p.intro_text_zh or "").strip())
+        for p in paragraphs
+    )
 
 
 @router.post("/{paper_id}/translate-zh")
-def translate_paper_to_zh(paper_id: int, db: Session = Depends(get_db)):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found.")
+def translate_paper_to_zh(
+    paper_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    paper = get_owned_paper_or_404(db, paper_id, current_user)
 
-    _refresh_stale_translation_status(paper, db)
+    if paper.parse_status != "processed" or paper.overview_status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="這篇論文尚未完成 PDF 解析與全文摘要，請等背景處理完成後再翻譯。",
+        )
 
     overview = (
         db.query(PaperOverview)
@@ -58,6 +50,12 @@ def translate_paper_to_zh(paper_id: int, db: Session = Depends(get_db)):
         .first()
     )
     if not overview:
+        error_message = "Chinese translation failed: Paper overview not found."
+        paper.zh_translation_status = "failed"
+        paper.zh_translation_error = error_message
+        paper.last_error_message = error_message
+        db.commit()
+        logger.warning("Translation rejected because overview was missing paper_id=%s user_id=%s", paper_id, current_user.id)
         raise HTTPException(status_code=404, detail="Paper overview not found.")
 
     paragraphs = (
@@ -67,112 +65,55 @@ def translate_paper_to_zh(paper_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    # 已完成就直接回
-    if paper.zh_translation_status == "completed":
+    missing_intro_text_zh = _has_missing_intro_text_zh(paragraphs)
+
+    if paper.zh_translation_status == "completed" and not missing_intro_text_zh:
+        logger.info("Translation skipped because already completed paper_id=%s user_id=%s", paper_id, current_user.id)
         return {
             "paper_id": paper_id,
             "status": "already_exists",
         }
 
-    # 如果現在真的正在處理中
-    if paper.zh_translation_status == "processing":
+    if paper.zh_translation_status in ("queued", "processing"):
+        logger.info(
+            "Translation skipped because already active paper_id=%s user_id=%s status=%s",
+            paper_id,
+            current_user.id,
+            paper.zh_translation_status,
+        )
         return {
             "paper_id": paper_id,
-            "status": "processing",
+            "status": paper.zh_translation_status,
         }
+
+    active_task = get_active_task_for_paper(db, paper_id=paper.id, task_type=TASK_TRANSLATE_ZH)
+    if active_task:
+        if paper.zh_translation_status not in ("queued", "processing"):
+            paper.zh_translation_status = active_task.status
+            paper.zh_translation_error = None
+            paper.last_error_message = None
+            db.commit()
+        return {
+            "paper_id": paper_id,
+            "status": active_task.status,
+        }
+
+    ensure_can_start_processing_task(db, current_user)
 
     try:
-        paper.zh_translation_status = "processing"
-        paper.zh_translation_started_at = datetime.now(timezone.utc)
-        paper.zh_translation_finished_at = None
+        task = create_translate_zh_task(db, paper=paper, user=current_user)
         db.commit()
-        db.refresh(paper)
-
-        elements = []
-        for p in paragraphs:
-            try:
-                key_points = json.loads(p.key_points) if p.key_points else None
-            except Exception:
-                key_points = None
-
-            try:
-                items = json.loads(p.items) if p.items else None
-            except Exception:
-                items = None
-
-            elements.append({
-                "id": p.paragraph_index,
-                "type": p.type,
-                "level": p.level,
-                "text": p.text,
-                "summary": p.summary,
-                "key_points": key_points,
-                "items": items,
-            })
-
-        translated_elements = translate_elements_to_zh(elements)
-
-        for p in paragraphs:
-            tr = translated_elements.get(p.paragraph_index)
-            if not tr:
-                continue
-
-            if tr.get("text_zh") is not None:
-                p.text_zh = tr["text_zh"]
-
-            if tr.get("summary_zh") is not None:
-                p.summary_zh = tr["summary_zh"]
-
-            if tr.get("key_points_zh") is not None:
-                p.key_points_zh = json.dumps(tr["key_points_zh"], ensure_ascii=False)
-
-            if tr.get("items_zh") is not None:
-                p.items_zh = json.dumps(tr["items_zh"], ensure_ascii=False)
-
-        overview_payload = {
-            "abstract_summary": overview.abstract_summary,
-            "overall_summary": overview.overall_summary,
-            "overall_key_points": json.loads(overview.overall_key_points),
-            "highlight_summaries": json.loads(overview.highlight_summaries),
-            "section_summaries": json.loads(overview.section_summaries),
-        }
-
-        translated_overview = translate_overview_to_zh(overview_payload)
-
-        overview.abstract_summary_zh = translated_overview["abstract_summary_zh"]
-        overview.overall_summary_zh = translated_overview["overall_summary_zh"]
-        overview.overall_key_points_zh = json.dumps(
-            translated_overview["overall_key_points_zh"],
-            ensure_ascii=False
+        logger.info(
+            "Translation queued paper_id=%s user_id=%s task_id=%s",
+            paper_id,
+            current_user.id,
+            task.id,
         )
-        overview.highlight_summaries_zh = json.dumps(
-            translated_overview["highlight_summaries_zh"],
-            ensure_ascii=False
-        )
-        overview.section_summaries_zh = json.dumps(
-            translated_overview["section_summaries_zh"],
-            ensure_ascii=False
-        )
-
-        paper.zh_translation_status = "completed"
-        paper.zh_translation_finished_at = datetime.now(timezone.utc)
-        db.commit()
-
         return {
             "paper_id": paper_id,
-            "status": "translated",
+            "status": "queued",
         }
-
     except Exception as e:
         db.rollback()
-
-        try:
-            paper = db.query(Paper).filter(Paper.id == paper_id).first()
-            if paper:
-                paper.zh_translation_status = "failed"
-                paper.zh_translation_finished_at = None
-                db.commit()
-        except Exception:
-            db.rollback()
-
-        raise HTTPException(status_code=500, detail=f"Chinese translation failed: {str(e)}")
+        logger.exception("Failed to queue translation paper_id=%s user_id=%s", paper_id, current_user.id)
+        raise HTTPException(status_code=500, detail=f"Failed to queue Chinese translation: {str(e)}")

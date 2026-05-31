@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.paragraph import Paragraph
+from app.models.user import User
 from app.models.paper_overview import PaperOverview
 from app.models.highlight import TextHighlight, PdfHighlight
 from app.schemas.paragraph_edit import (
@@ -20,12 +21,31 @@ from app.services.edit_service import (
     regenerate_section_summary_zh,
     update_section_summary_in_overview,
     build_section_summaries_for_regeneration,
+    remove_section_summary_from_overview,
 )
 from app.services.translation_service import translate_elements_to_zh
+from app.services.auth_service import get_current_user
+from app.services.ownership_service import get_owned_paragraph_or_404
+from app.services.task_service import get_active_task_for_paper
 
 
 router = APIRouter(prefix="/paragraphs", tags=["Paragraphs"])
 
+
+
+
+def _ensure_no_active_background_task(db: Session, paper_id: int) -> None:
+    active_task = get_active_task_for_paper(db, paper_id=paper_id)
+    if not active_task:
+        return
+
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "這篇論文目前正在背景處理中，請等處理完成後再修改內容。"
+            f"目前任務：{active_task.task_type}。"
+        ),
+    )
 
 def _rebuild_bullet_content(intro_text: str | None, items: list[str]) -> str:
     parts = []
@@ -208,11 +228,10 @@ def update_paragraph(
     paragraph_id: int,
     payload: ParagraphUpdateRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    paragraph = db.query(Paragraph).filter(Paragraph.id == paragraph_id).first()
-
-    if not paragraph:
-        raise HTTPException(status_code=404, detail="Paragraph not found.")
+    paragraph = get_owned_paragraph_or_404(db, paragraph_id, current_user)
+    _ensure_no_active_background_task(db, paragraph.paper_id)
 
     if paragraph.type != "paragraph":
         raise HTTPException(status_code=400, detail="Only paragraph editing is supported here.")
@@ -246,6 +265,7 @@ def update_paragraph(
             "text": paragraph.text,
             "summary": paragraph.summary,
             "key_points": paragraph_result["key_points"],
+            "intro_text": None,
             "items": None,
         }
     ])
@@ -274,11 +294,10 @@ def update_bullet_list(
     paragraph_id: int,
     payload: BulletListUpdateRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    row = db.query(Paragraph).filter(Paragraph.id == paragraph_id).first()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Paragraph not found.")
+    row = get_owned_paragraph_or_404(db, paragraph_id, current_user)
+    _ensure_no_active_background_task(db, row.paper_id)
 
     if row.type != "bullet_list":
         raise HTTPException(status_code=400, detail="Only bullet_list editing is supported here.")
@@ -316,6 +335,7 @@ def update_bullet_list(
             "text": None,
             "summary": row.summary,
             "key_points": bullet_result["key_points"],
+            "intro_text": intro_text,
             "items": items,
         }
     ])
@@ -324,6 +344,7 @@ def update_bullet_list(
     if tr:
         row.summary_zh = tr.get("summary_zh")
         row.key_points_zh = json.dumps(tr.get("key_points_zh", []), ensure_ascii=False)
+        row.intro_text_zh = tr.get("intro_text_zh")
         row.items_zh = json.dumps(tr.get("items_zh", []), ensure_ascii=False)
 
     db.commit()
@@ -344,11 +365,10 @@ def insert_paragraph_after(
     paragraph_id: int,
     payload: ParagraphInsertRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    anchor = db.query(Paragraph).filter(Paragraph.id == paragraph_id).first()
-
-    if not anchor:
-        raise HTTPException(status_code=404, detail="Paragraph not found.")
+    anchor = get_owned_paragraph_or_404(db, paragraph_id, current_user)
+    _ensure_no_active_background_task(db, anchor.paper_id)
 
     if anchor.type not in ["paragraph", "bullet_list"]:
         raise HTTPException(
@@ -392,6 +412,7 @@ def insert_paragraph_after(
             "text": new_row.text,
             "summary": new_row.summary,
             "key_points": paragraph_result["key_points"],
+            "intro_text": None,
             "items": None,
         }
     ])
@@ -401,6 +422,15 @@ def insert_paragraph_after(
         new_row.text_zh = tr.get("text_zh")
         new_row.summary_zh = tr.get("summary_zh")
         new_row.key_points_zh = json.dumps(tr.get("key_points_zh", []), ensure_ascii=False)
+
+    # Inserting a paragraph changes section content, so clear only the
+    # affected section-summary text highlights before refreshing that section.
+    # Keep paper-level Overview Key Points and Highlights unchanged.
+    _delete_related_section_summary_highlights_for_paragraph(
+        db,
+        paper_id=new_row.paper_id,
+        section_title=new_row.section_title,
+    )
 
     db.commit()
     db.refresh(new_row)
@@ -419,11 +449,10 @@ def insert_paragraph_after(
 def delete_paragraph(
     paragraph_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    row = db.query(Paragraph).filter(Paragraph.id == paragraph_id).first()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Paragraph not found.")
+    row = get_owned_paragraph_or_404(db, paragraph_id, current_user)
+    _ensure_no_active_background_task(db, row.paper_id)
 
     if row.type not in ["paragraph", "bullet_list"]:
         raise HTTPException(
@@ -441,6 +470,15 @@ def delete_paragraph(
         ["text", "summary", "key_points", "intro_text", "item"],
     )
     _delete_paragraph_pdf_highlights(db, row.id)
+
+    # Deleting a paragraph changes section content, so clear only the
+    # affected section-summary text highlights before refreshing/removing that
+    # section. Keep paper-level Overview Key Points and Highlights unchanged.
+    _delete_related_section_summary_highlights_for_paragraph(
+        db,
+        paper_id=paper_id,
+        section_title=section_title,
+    )
 
     db.delete(row)
     db.flush()
@@ -467,6 +505,13 @@ def delete_paragraph(
 
         if remaining:
             _refresh_section_summaries(db, remaining)
+        else:
+            remove_section_summary_from_overview(
+                db=db,
+                paper_id=paper_id,
+                section_title=section_title,
+            )
+            db.commit()
 
     return {
         "paragraph_id": paragraph_id,

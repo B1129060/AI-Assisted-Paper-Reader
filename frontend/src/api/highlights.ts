@@ -6,14 +6,44 @@ import type {
   TextHighlight,
 } from "../types/highlight";
 
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "./apiConfig";
+
+async function getErrorMessage(res: Response, fallback: string) {
+  try {
+    const data = await res.json();
+    if (typeof data?.detail === "string") {
+      return data.detail;
+    }
+    if (Array.isArray(data?.detail)) {
+      return data.detail
+        .map((item: unknown) => {
+          if (typeof item === "object" && item !== null && "msg" in item) {
+            const msg = (item as { msg?: unknown }).msg;
+            return typeof msg === "string" ? msg : String(msg);
+          }
+          return String(item);
+        })
+        .join("; ");
+    }
+  } catch {
+    // Ignore JSON parse errors and use fallback.
+  }
+
+  if (res.status === 404) {
+    return "Paper not found.";
+  }
+
+  return fallback;
+}
 
 export async function fetchHighlights(
   paperId: number,
   language: "en" | "zh"
 ): Promise<PaperHighlightsResponse> {
   const res = await fetch(`${API_BASE}/papers/${paperId}/highlights?language=${language}`);
-  if (!res.ok) throw new Error("Failed to fetch highlights");
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to fetch highlights"));
+  }
   return res.json();
 }
 
@@ -25,7 +55,9 @@ export async function createTextHighlight(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Failed to create text highlight");
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to create text highlight"));
+  }
   return res.json();
 }
 
@@ -33,7 +65,9 @@ export async function deleteTextHighlight(highlightId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/highlights/text/${highlightId}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete text highlight");
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to delete text highlight"));
+  }
 }
 
 export async function createPdfHighlight(
@@ -44,7 +78,9 @@ export async function createPdfHighlight(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Failed to create PDF highlight");
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to create PDF highlight"));
+  }
   return res.json();
 }
 
@@ -52,5 +88,7 @@ export async function deletePdfHighlight(highlightId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/highlights/pdf/${highlightId}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete PDF highlight");
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, "Failed to delete PDF highlight"));
+  }
 }

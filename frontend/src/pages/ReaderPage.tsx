@@ -1,3 +1,5 @@
+// Main reading page that coordinates paper data, overview, translations, highlights, editing, PDF navigation, audio, export, and delete flows.
+
 import {
   createRef,
   useEffect,
@@ -41,19 +43,23 @@ import HighlightColorToolbar from "../components/HighlightColorToolbar";
 import ExportModal from "../components/ExportModal";
 import { API_BASE } from "../api/apiConfig";
 
+// Component props for this file.
 type Props = {
   paperId: number;
   onBack: () => void;
 };
 
+// Normalize section key.
 function normalizeSectionKey(text: string) {
   return text.trim().toLowerCase();
 }
 
+// Normalize task status.
 function normalizeTaskStatus(status?: string | null) {
   return (status || "").toLowerCase();
 }
 
+// Get friendly reader error.
 function getFriendlyReaderError(
   message?: string | null,
   fallbackType?: "parse" | "overview" | "translation" | "processing",
@@ -117,6 +123,7 @@ function getFriendlyReaderError(
   return "系統處理時發生錯誤，請重新整理狀態或稍後再試。";
 }
 
+// Reader page coordinator for text/PDF views, status refresh, translation, editing, highlights, audio, export, and delete actions.
 export default function ReaderPage({ paperId, onBack }: Props) {
   const [paper, setPaper] = useState<PaperDetail | null>(null);
   const [overview, setOverview] = useState<PaperOverview | null>(null);

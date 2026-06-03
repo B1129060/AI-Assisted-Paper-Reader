@@ -1,3 +1,5 @@
+# Database model for uploaded papers and their processing/export status fields.
+
 from sqlalchemy import Column, ForeignKey, Integer, String, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -5,6 +7,7 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
+# Uploaded paper row with processing, translation, export, and ownership metadata.
 class Paper(Base):
     __tablename__ = "papers"
 

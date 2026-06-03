@@ -1,3 +1,5 @@
+# Database model for application users mapped from development or school-login identity.
+
 from sqlalchemy import Column, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -5,6 +7,7 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
+# Application user row keyed by school or development identity.
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (

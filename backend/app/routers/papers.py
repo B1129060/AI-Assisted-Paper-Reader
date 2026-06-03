@@ -1,3 +1,5 @@
+# API routes for listing, reading, exporting, renaming, serving, and deleting papers.
+
 import logging
 import os
 import shutil
@@ -38,10 +40,12 @@ from app.services.export_service import (
 router = APIRouter(prefix="/papers", tags=["Papers"])
 logger = logging.getLogger(__name__)
 
+# Request body for updating a paper title.
 class PaperTitleUpdateRequest(BaseModel):
     title: str
 
 
+# Return a paper only when it belongs to the current user.
 def get_owned_paper_or_404(db: Session, paper_id: int, current_user: User) -> Paper:
     paper = (
         db.query(Paper)
@@ -55,16 +59,19 @@ def get_owned_paper_or_404(db: Session, paper_id: int, current_user: User) -> Pa
     return paper
 
 
+# Resolve the upload root from settings.
 def _get_upload_root() -> Path:
     return settings.upload_dir_path
 
 
+# Return the structured upload directory for a paper.
 def _get_structured_paper_dir(paper: Paper) -> Path:
     return _get_upload_root() / f"user_{paper.user_id}" / f"paper_{paper.id}"
 
 
 
 
+# Check whether parse, overview, or translation is still active.
 def _is_core_processing(paper: Paper) -> bool:
     return (
         paper.parse_status in ["queued", "processing"]
@@ -73,6 +80,7 @@ def _is_core_processing(paper: Paper) -> bool:
     )
 
 
+# Refresh stale state and reject deletion while core processing is active.
 def _ensure_paper_can_be_deleted(db: Session, paper: Paper) -> None:
     # If the paper was stuck in processing from a previous interrupted request,
     # finalize it as failed first. A stale failed paper may be deleted; an
@@ -90,6 +98,7 @@ def _ensure_paper_can_be_deleted(db: Session, paper: Paper) -> None:
             detail="這篇論文仍在處理中，請等處理完成後再刪除。",
         )
 
+# Delete the structured paper directory or legacy uploaded PDF path.
 def _delete_uploaded_pdf_or_paper_dir(paper: Paper) -> bool:
     structured_dir = _get_structured_paper_dir(paper)
     deleted_anything = False
@@ -113,6 +122,7 @@ def _delete_uploaded_pdf_or_paper_dir(paper: Paper) -> bool:
     return deleted_anything
 
 
+# Persist successful immediate export status.
 def _mark_export_completed(db: Session, paper: Paper) -> None:
     logger.info("Export completed paper_id=%s user_id=%s", paper.id, paper.user_id)
     paper.export_status = "completed"
@@ -122,6 +132,7 @@ def _mark_export_completed(db: Session, paper: Paper) -> None:
     db.refresh(paper)
 
 
+# Persist failed immediate export status with a user-facing message.
 def _mark_export_failed(
     db: Session,
     paper_id: int,
@@ -148,6 +159,7 @@ def _mark_export_failed(
 
 
 @router.get("/", response_model=list[PaperListItemResponse])
+# Return the current user's papers after refreshing stale statuses.
 def list_papers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -189,6 +201,7 @@ def list_papers(
 
 
 @router.get("/{paper_id}", response_model=PaperDetailResponse)
+# Return reader-page paper data, elements, translations, and PDF locations.
 def get_paper_detail(
     paper_id: int,
     lang: str = Query("en", pattern="^(en|zh)$"),
@@ -296,6 +309,7 @@ def get_paper_detail(
 
 
 @router.get("/{paper_id}/pdf")
+# Serve the owned PDF inline with a safe display filename.
 def get_paper_pdf(
     paper_id: int,
     db: Session = Depends(get_db),
@@ -320,6 +334,7 @@ def get_paper_pdf(
 
 
 @router.delete("/{paper_id}")
+# Delete the paper row, uploaded files, and matching debug files.
 def delete_paper(
     paper_id: int,
     db: Session = Depends(get_db),
@@ -381,6 +396,7 @@ def delete_paper(
 
 
 @router.delete("/{paper_id}/db-only")
+# Delete only the database paper row after safety checks.
 def delete_paper_db_only(
     paper_id: int,
     db: Session = Depends(get_db),
@@ -409,6 +425,7 @@ def delete_paper_db_only(
     }
 
 @router.post("/{paper_id}/export")
+# Build immediate export files and return either a PDF or ZIP response.
 def export_paper(
     paper_id: int,
     options: ExportOptions,
@@ -615,6 +632,7 @@ def export_paper(
         raise HTTPException(status_code=500, detail=message)
 
 @router.delete("/{paper_id}/with-file")
+# Delete the paper row and uploaded file directory.
 def delete_paper_with_file(
     paper_id: int,
     db: Session = Depends(get_db),
@@ -655,6 +673,7 @@ def delete_paper_with_file(
     }
 
 @router.patch("/{paper_id}/title")
+# Validate and persist a new display title for a paper.
 def update_paper_title(
     paper_id: int,
     payload: PaperTitleUpdateRequest,

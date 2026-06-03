@@ -1,9 +1,12 @@
+# pymupdf4llm extraction helpers for markdown and page-box position data.
+
 import re
 from typing import Any, Dict, List
 
 import pymupdf4llm
 
 
+# Extract markdown from a PDF using pymupdf4llm.
 def extract_markdown_with_pymupdf4llm(pdf_path: str) -> str:
     """
     主線：保留你現在原本的 markdown 抽取方式。
@@ -13,6 +16,7 @@ def extract_markdown_with_pymupdf4llm(pdf_path: str) -> str:
     return markdown or ""
 
 
+# Internal helper for normalize text.
 def _normalize_text(text: str) -> str:
     """
     給位置映射用的文字正規化：
@@ -49,6 +53,7 @@ def _normalize_text(text: str) -> str:
     return text.lower().strip()
 
 
+# Extract page-box position data used for PDF highlight matching.
 def extract_position_data_with_page_boxes(pdf_path: str) -> Dict[str, Any]:
     """
     支線：用 pymupdf4llm 的 page_chunks + page_boxes 提供

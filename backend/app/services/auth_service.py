@@ -1,3 +1,5 @@
+# Development identity service that provides the current user until school SSO is connected.
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -6,6 +8,7 @@ from app.database import get_db
 from app.models.user import User
 
 
+# Create or refresh the single development user record.
 def get_or_create_dev_user(db: Session) -> User:
     """
     Temporary development identity used before the school SSO bridge is connected.
@@ -46,6 +49,7 @@ def get_or_create_dev_user(db: Session) -> User:
         raise HTTPException(status_code=500, detail=f"Failed to initialize development user: {exc}")
 
 
+# Current-user dependency used by routers during development.
 def get_current_user(db: Session = Depends(get_db)) -> User:
     """
     Temporary current-user dependency.

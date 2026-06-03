@@ -1,7 +1,10 @@
+# Database model for structured paper elements, translations, and PDF locations.
+
 from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from app.database import Base
 
 
+# Stored structured reading element produced from the PDF pipeline.
 class Paragraph(Base):
     __tablename__ = "paragraphs"
 

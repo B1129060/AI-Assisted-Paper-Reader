@@ -1,3 +1,5 @@
+# Paper/task consistency recovery and stale processing status handling.
+
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -24,10 +26,12 @@ EXPORT_STALE_MINUTES = 10
 ACTIVE_PAPER_STATUSES = ("queued", "processing")
 
 
+# Utc now.
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Internal helper for as aware.
 def _as_aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -36,6 +40,7 @@ def _as_aware(value: datetime | None) -> datetime | None:
     return value
 
 
+# Internal helper for is stale.
 def _is_stale(started_at: datetime | None, minutes: int) -> bool:
     started = _as_aware(started_at)
     if started is None:
@@ -43,10 +48,12 @@ def _is_stale(started_at: datetime | None, minutes: int) -> bool:
     return utc_now() - started > timedelta(minutes=minutes)
 
 
+# Internal helper for short.
 def _short(message: str) -> str:
     return message[:500]
 
 
+# Internal helper for active task exists.
 def _active_task_exists(
     db: Session,
     *,
@@ -63,10 +70,12 @@ def _active_task_exists(
     return query.first() is not None
 
 
+# Internal helper for paper has any active task.
 def _paper_has_any_active_task(db: Session, paper_id: int) -> bool:
     return _active_task_exists(db, paper_id=paper_id)
 
 
+# Internal helper for queue parse overview task.
 def _queue_parse_overview_task(db: Session, paper: Paper) -> None:
     paper.parse_status = "queued"
     paper.parse_error = None
@@ -92,6 +101,7 @@ def _queue_parse_overview_task(db: Session, paper: Paper) -> None:
     )
 
 
+# Internal helper for queue regenerate overview task.
 def _queue_regenerate_overview_task(db: Session, paper: Paper) -> None:
     paper.overview_status = "queued"
     paper.overview_error = None
@@ -110,6 +120,7 @@ def _queue_regenerate_overview_task(db: Session, paper: Paper) -> None:
     )
 
 
+# Internal helper for queue translate zh task.
 def _queue_translate_zh_task(db: Session, paper: Paper) -> None:
     paper.zh_translation_status = "queued"
     paper.zh_translation_error = None
@@ -128,6 +139,7 @@ def _queue_translate_zh_task(db: Session, paper: Paper) -> None:
     )
 
 
+# Internal helper for reset impossible translation state.
 def _reset_impossible_translation_state(paper: Paper) -> bool:
     """Translation cannot run before parse + overview are complete.
 
@@ -151,6 +163,7 @@ def _reset_impossible_translation_state(paper: Paper) -> bool:
     return True
 
 
+# Repair missing active task for paper.
 def repair_missing_active_task_for_paper(db: Session, paper: Paper) -> bool:
     """Repair paper/task mismatch for one paper.
 
@@ -205,6 +218,7 @@ def repair_missing_active_task_for_paper(db: Session, paper: Paper) -> bool:
     return False
 
 
+# Repair missing active tasks for papers.
 def repair_missing_active_tasks_for_papers(db: Session, papers: list[Paper]) -> int:
     changed_count = 0
     for paper in papers:
@@ -222,6 +236,7 @@ def repair_missing_active_tasks_for_papers(db: Session, papers: list[Paper]) -> 
     return changed_count
 
 
+# Repair all missing active tasks.
 def repair_all_missing_active_tasks(db: Session) -> int:
     """Repair every paper that is active on paper status but has no active task."""
     papers = (
@@ -238,6 +253,7 @@ def repair_all_missing_active_tasks(db: Session) -> int:
     return repair_missing_active_tasks_for_papers(db, papers)
 
 
+# Refresh stale processing status.
 def refresh_stale_processing_status(paper: Paper, db: Session | None = None) -> bool:
     """
     Convert paper-level processing states that have been stuck too long into
@@ -317,6 +333,7 @@ def refresh_stale_processing_status(paper: Paper, db: Session | None = None) -> 
     return changed
 
 
+# Refresh stale papers.
 def refresh_stale_papers(db: Session, papers: list[Paper]) -> None:
     repaired_count = repair_missing_active_tasks_for_papers(db, papers)
 
@@ -336,6 +353,7 @@ def refresh_stale_papers(db: Session, papers: list[Paper]) -> None:
         logger.warning("Repaired missing active tasks while refreshing papers count=%s", repaired_count)
 
 
+# Refresh all stale processing papers.
 def refresh_all_stale_processing_papers(db: Session) -> int:
     """
     Refresh every paper currently marked as processing.
@@ -371,6 +389,7 @@ def refresh_all_stale_processing_papers(db: Session) -> int:
     return changed_count
 
 
+# Repair and refresh all processing papers.
 def repair_and_refresh_all_processing_papers(db: Session) -> dict[str, int]:
     """Startup-level consistency recovery.
 

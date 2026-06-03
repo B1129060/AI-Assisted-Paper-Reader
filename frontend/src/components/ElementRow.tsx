@@ -1,8 +1,11 @@
+// Structured element row for headings, paragraphs, bullet lists, editing, hover translation, and text highlights.
+
 import { useEffect, useState, type MouseEvent, type RefObject } from "react";
 import type { Element } from "../types/paper";
 import type { HighlightColor, TextHighlight } from "../types/highlight";
 import HighlightableText from "./HighlightableText";
 
+// Component props for this file.
 type Props = {
   paperId: number;
   element: Element;
@@ -24,6 +27,7 @@ type Props = {
   editDisabled?: boolean;
 };
 
+// Data structure for element with zh.
 type ElementWithZh = Element & {
   text_zh?: string | null;
   summary_zh?: string | null;
@@ -32,6 +36,7 @@ type ElementWithZh = Element & {
   items_zh?: string[] | null;
 };
 
+// Render one structured element and expose edit/highlight/insert/delete actions.
 export default function ElementRow({
   paperId,
   element,

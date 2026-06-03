@@ -1,9 +1,12 @@
+# Database models for text highlights and PDF-area highlights.
+
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.sql import func
 
 from app.database import Base
 
 
+# Stored text highlight with offsets into paragraph or overview text.
 class TextHighlight(Base):
     __tablename__ = "text_highlights"
 
@@ -50,6 +53,7 @@ class TextHighlight(Base):
     )
 
 
+# Stored PDF-area highlight using normalized page rectangles.
 class PdfHighlight(Base):
     __tablename__ = "pdf_highlights"
 

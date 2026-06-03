@@ -1,3 +1,6 @@
+// Frontend paper, element, PDF location, and overview types.
+
+// Home-page paper list item returned by the backend.
 export type PaperListItem = {
   paper_id: number;
   title: string | null;
@@ -21,11 +24,13 @@ export type PaperListItem = {
   last_error_message?: string | null;
 };
 
+// Normalized PDF location used to jump/highlight generated paragraph matches.
 export type PdfLocation = {
   page: number;
   bbox: [number, number, number, number];
 };
 
+// Reader-page paper detail payload.
 export type PaperDetail = {
   paper_id: number;
   title: string | null;
@@ -51,6 +56,7 @@ export type PaperDetail = {
   elements: Element[];
 };
 
+// Structured reader element displayed in the paragraph table.
 export type Element = {
   id: number;
   paragraph_id: number;
@@ -72,18 +78,21 @@ export type Element = {
   pdf_locations?: PdfLocation[];
 };
 
+// Paper-level highlight summary item.
 export type HighlightSummary = {
   element_id: number;
   title: string;
   summary: string;
 };
 
+// Paper-level section summary item.
 export type SectionSummary = {
   section_key?: string;
   section_title: string;
   summary: string;
 };
 
+// Paper-level overview payload.
 export type PaperOverview = {
   paper_id: number;
   language: string;

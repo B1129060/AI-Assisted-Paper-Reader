@@ -1,3 +1,5 @@
+# Startup storage maintenance for temporary uploads and orphaned paper files.
+
 import logging
 import os
 import shutil
@@ -12,10 +14,12 @@ from app.models.paper import Paper
 logger = logging.getLogger(__name__)
 
 
+# Internal helper for as aware timestamp.
 def _as_aware_timestamp(timestamp: float) -> datetime:
     return datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
 
+# Delete old temporary files left in uploads/_incoming.
 def cleanup_stale_incoming_files() -> int:
     """Delete old temporary files in uploads/_incoming.
 
@@ -64,10 +68,12 @@ def cleanup_stale_incoming_files() -> int:
     return deleted_count
 
 
+# Internal helper for existing paper ids.
 def _existing_paper_ids(db: Session) -> set[int]:
     return {paper_id for (paper_id,) in db.query(Paper.id).all()}
 
 
+# Internal helper for existing stored paths.
 def _existing_stored_paths(db: Session) -> set[Path]:
     paths: set[Path] = set()
     for (raw_path,) in db.query(Paper.stored_file_path).all():
@@ -80,6 +86,7 @@ def _existing_stored_paths(db: Session) -> set[Path]:
     return paths
 
 
+# Internal helper for parse structured paper id.
 def _parse_structured_paper_id(paper_dir: Path) -> int | None:
     name = paper_dir.name
     if not name.startswith("paper_"):
@@ -90,6 +97,7 @@ def _parse_structured_paper_id(paper_dir: Path) -> int | None:
         return None
 
 
+# Find or optionally delete upload files no longer referenced by the database.
 def scan_orphan_uploaded_files(db: Session) -> dict[str, int]:
     """Scan uploaded files that are no longer referenced by the database.
 
@@ -190,6 +198,7 @@ def scan_orphan_uploaded_files(db: Session) -> dict[str, int]:
     return {"orphan_dirs": orphan_dirs, "orphan_files": orphan_files, "deleted": deleted}
 
 
+# Run safe storage cleanup tasks during API startup.
 def run_startup_storage_cleanup(db: Session) -> None:
     """Run safe storage maintenance tasks during backend startup."""
     cleanup_stale_incoming_files()

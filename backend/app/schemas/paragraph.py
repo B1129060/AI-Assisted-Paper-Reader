@@ -1,12 +1,16 @@
+# Pydantic schemas for parsed paragraph elements and PDF location data.
+
 from pydantic import BaseModel, Field
 from typing import Literal, List, Optional
 
 
+# PDF location with page number and bounding box.
 class PdfLocation(BaseModel):
     page: int
     bbox: List[float]
 
 
+# Structured paragraph result produced by parsing and LLM processing.
 class ParagraphResult(BaseModel):
     global_paragraph_index: int
     chunk_index: int
@@ -38,6 +42,7 @@ class ParagraphResult(BaseModel):
     pdf_locations: List[PdfLocation] = Field(default_factory=list)
 
 
+# Reader-page element response sent to the frontend.
 class ElementResponse(BaseModel):
     id: int
     paragraph_id: int

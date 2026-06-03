@@ -1,3 +1,5 @@
+# Top-level parser pipeline for one uploaded PDF.
+
 import logging
 
 from app.config import settings
@@ -8,6 +10,7 @@ from app.services.llm_processor import process_chunk_with_llm
 from app.services.paragraph_builder import build_paragraph_results
 
 
+# Run PDF parsing, chunk LLM processing, and paragraph building for one upload.
 def process_uploaded_paper(
     paper_id: int,
     pdf_path: str,

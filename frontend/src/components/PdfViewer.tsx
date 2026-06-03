@@ -1,3 +1,5 @@
+// PDF viewer with page tracking, zoom-anchor restore, generated location highlights, and user PDF highlights.
+
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import type { HighlightColor, PdfHighlight } from "../types/highlight";
@@ -6,16 +8,19 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
+// Normalized PDF location used to jump/highlight generated paragraph matches.
 type PdfLocation = {
   page: number;
   bbox: [number, number, number, number];
 };
 
+// Data structure for loaded page.
 type LoadedPage = {
   pageNumber: number;
   getViewport: (params: { scale: number }) => any;
 };
 
+// Component props for this file.
 type Props = {
   paperId: number;
   pdfUrl: string;
@@ -32,6 +37,7 @@ type Props = {
   onDeletePdfHighlight: (highlightId: number) => Promise<void>;
 };
 
+// Data structure for pdf view state.
 export type PdfViewState = {
   pageNumber: number;
   offsetRatioX: number;
@@ -40,12 +46,14 @@ export type PdfViewState = {
   viewportY: number;
 };
 
+// Data structure for pdf viewer handle.
 export type PdfViewerHandle = {
   captureZoomAnchor: () => void;
   captureViewState: () => PdfViewState | null;
   restoreViewState: (state: PdfViewState) => void;
 };
 
+// Data structure for zoom anchor.
 type ZoomAnchor = {
   pageNumber: number;
   offsetRatioX: number;
@@ -54,11 +62,13 @@ type ZoomAnchor = {
   viewportY: number;
 };
 
+// Clamp.
 function clamp(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
 }
 
+// Pdf rect to viewport rect.
 function pdfRectToViewportRect(
   viewport: any,
   bbox: [number, number, number, number]
@@ -74,6 +84,7 @@ function pdfRectToViewportRect(
   };
 }
 
+// Ratio rect to viewport rect.
 function ratioRectToViewportRect(
   viewport: any,
   rect: [number, number, number, number]
@@ -87,6 +98,7 @@ function ratioRectToViewportRect(
   };
 }
 
+// Build rect.
 function buildRect(
   start: { x: number; y: number },
   end: { x: number; y: number }
@@ -99,6 +111,7 @@ function buildRect(
   };
 }
 
+// Render the PDF, generated paragraph locations, user highlights, and zoom-safe navigation.
 const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer({
   paperId,
   pdfUrl,

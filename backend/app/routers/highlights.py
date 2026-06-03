@@ -1,3 +1,5 @@
+# API routes for reading, creating, and deleting text/PDF highlights.
+
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +27,7 @@ from app.schemas.highlight import (
 router = APIRouter(tags=["Highlights"])
 
 
+# Prevent overview text highlights while an overview-affecting background task is active.
 def _ensure_can_create_text_highlight(db: Session, paper_id: int, scope: str) -> None:
     if scope != "overview":
         return
@@ -43,6 +46,7 @@ def _ensure_can_create_text_highlight(db: Session, paper_id: int, scope: str) ->
 
 
 @router.get("/papers/{paper_id}/highlights", response_model=PaperHighlightsResponse)
+# Return all highlights for one owned paper and requested text language.
 def get_paper_highlights(
     paper_id: int,
     language: str = Query("en", pattern="^(en|zh)$"),
@@ -105,6 +109,7 @@ def get_paper_highlights(
 
 
 @router.post("/highlights/text", response_model=TextHighlightResponse)
+# Validate ownership and offsets, then store a text highlight.
 def create_text_highlight(
     payload: TextHighlightCreateRequest,
     db: Session = Depends(get_db),
@@ -149,6 +154,7 @@ def create_text_highlight(
 
 
 @router.delete("/highlights/text/{highlight_id}")
+# Delete one owned text highlight.
 def delete_text_highlight(
     highlight_id: int,
     db: Session = Depends(get_db),
@@ -162,6 +168,7 @@ def delete_text_highlight(
 
 
 @router.post("/highlights/pdf", response_model=PdfHighlightResponse)
+# Validate ownership and rectangles, then store a PDF highlight.
 def create_pdf_highlight(
     payload: PdfHighlightCreateRequest,
     db: Session = Depends(get_db),
@@ -197,6 +204,7 @@ def create_pdf_highlight(
 
 
 @router.delete("/highlights/pdf/{highlight_id}")
+# Delete one owned PDF highlight.
 def delete_pdf_highlight(
     highlight_id: int,
     db: Session = Depends(get_db),

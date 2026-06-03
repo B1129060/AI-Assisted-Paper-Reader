@@ -1,3 +1,5 @@
+# Per-user limits for stored papers and active processing jobs.
+
 import logging
 
 from fastapi import HTTPException
@@ -18,6 +20,7 @@ PROCESSING_FILTER = or_(
 )
 
 
+# Count all papers owned by one user.
 def count_user_papers(db: Session, current_user: User) -> int:
     return (
         db.query(Paper)
@@ -26,6 +29,7 @@ def count_user_papers(db: Session, current_user: User) -> int:
     )
 
 
+# Count papers whose core processing status is queued or processing.
 def count_user_processing_papers(db: Session, current_user: User) -> int:
     return (
         db.query(Paper)
@@ -35,6 +39,7 @@ def count_user_processing_papers(db: Session, current_user: User) -> int:
     )
 
 
+# Enforce total paper and active processing limits before upload.
 def ensure_can_upload_paper(db: Session, current_user: User) -> None:
     max_papers = settings.MAX_PAPERS_PER_USER
     if max_papers > 0 and count_user_papers(db, current_user) >= max_papers:
@@ -47,6 +52,7 @@ def ensure_can_upload_paper(db: Session, current_user: User) -> None:
     ensure_can_start_processing_task(db, current_user)
 
 
+# Enforce the per-user active processing limit.
 def ensure_can_start_processing_task(db: Session, current_user: User) -> None:
     max_processing = settings.MAX_PROCESSING_PAPERS_PER_USER
     if max_processing <= 0:

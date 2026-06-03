@@ -1,3 +1,5 @@
+# API routes for editing, inserting, and deleting paragraph-level content.
+
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,6 +36,7 @@ router = APIRouter(prefix="/paragraphs", tags=["Paragraphs"])
 
 
 
+# Block edits while any active background task exists for the paper.
 def _ensure_no_active_background_task(db: Session, paper_id: int) -> None:
     active_task = get_active_task_for_paper(db, paper_id=paper_id)
     if not active_task:
@@ -47,6 +50,7 @@ def _ensure_no_active_background_task(db: Session, paper_id: int) -> None:
         ),
     )
 
+# Rebuild the compatibility content field from bullet intro and items.
 def _rebuild_bullet_content(intro_text: str | None, items: list[str]) -> str:
     parts = []
     if intro_text and intro_text.strip():
@@ -55,6 +59,7 @@ def _rebuild_bullet_content(intro_text: str | None, items: list[str]) -> str:
     return "\n".join(parts)
 
 
+# Regenerate the affected section summary after an edit.
 def _refresh_section_summaries(db: Session, paragraph: Paragraph) -> None:
     if not paragraph.section_title:
         return
@@ -100,6 +105,7 @@ def _refresh_section_summaries(db: Session, paragraph: Paragraph) -> None:
         db.commit()
 
 
+# Shift later paragraph indices before inserting a new element.
 def _shift_paragraph_indices_after_insert(db: Session, paper_id: int, after_index: int) -> None:
     rows = (
         db.query(Paragraph)
@@ -115,6 +121,7 @@ def _shift_paragraph_indices_after_insert(db: Session, paper_id: int, after_inde
         row.paragraph_index += 1
 
 
+# Shift later paragraph indices after deleting an element.
 def _shift_paragraph_indices_after_delete(db: Session, paper_id: int, deleted_index: int) -> None:
     rows = (
         db.query(Paragraph)
@@ -130,6 +137,7 @@ def _shift_paragraph_indices_after_delete(db: Session, paper_id: int, deleted_in
         row.paragraph_index -= 1
 
 
+# Remove text highlights tied to fields that are being regenerated.
 def _delete_paragraph_text_highlights(
     db: Session,
     paragraph_id: int,
@@ -146,6 +154,7 @@ def _delete_paragraph_text_highlights(
     )
 
 
+# Remove PDF highlights tied to a deleted paragraph.
 def _delete_paragraph_pdf_highlights(
     db: Session,
     paragraph_id: int,
@@ -157,6 +166,7 @@ def _delete_paragraph_pdf_highlights(
     )
 
 
+# Remove section-summary highlights whose item index may change after the edit.
 def _delete_related_section_summary_highlights_for_paragraph(
     db: Session,
     paper_id: int,
@@ -224,6 +234,7 @@ def _delete_related_section_summary_highlights_for_paragraph(
 
 
 @router.put("/{paragraph_id}", response_model=ParagraphUpdateResponse)
+# Update a paragraph, regenerate summaries/translations, and refresh section summary.
 def update_paragraph(
     paragraph_id: int,
     payload: ParagraphUpdateRequest,
@@ -290,6 +301,7 @@ def update_paragraph(
 
 
 @router.put("/{paragraph_id}/bullet-list", response_model=ParagraphUpdateResponse)
+# Update a bullet list, regenerate summaries/translations, and refresh section summary.
 def update_bullet_list(
     paragraph_id: int,
     payload: BulletListUpdateRequest,
@@ -361,6 +373,7 @@ def update_bullet_list(
 
 
 @router.post("/{paragraph_id}/insert-after", response_model=ParagraphUpdateResponse)
+# Insert a new paragraph after an existing paragraph or bullet list.
 def insert_paragraph_after(
     paragraph_id: int,
     payload: ParagraphInsertRequest,
@@ -446,6 +459,7 @@ def insert_paragraph_after(
 
 
 @router.delete("/{paragraph_id}", response_model=ParagraphUpdateResponse)
+# Delete a paragraph or bullet list and repair affected section summaries.
 def delete_paragraph(
     paragraph_id: int,
     db: Session = Depends(get_db),

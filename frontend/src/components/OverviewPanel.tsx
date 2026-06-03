@@ -1,7 +1,10 @@
+// Paper overview renderer with overview-level text highlights and section navigation.
+
 import type { PaperOverview } from "../types/paper";
 import type { HighlightColor, TextHighlight } from "../types/highlight";
 import HighlightableText from "./HighlightableText";
 
+// Component props for this file.
 type Props = {
   paperId: number;
   overview: PaperOverview;
@@ -15,6 +18,7 @@ type Props = {
   textHighlightMode: boolean;
 };
 
+// Data structure for overview with zh.
 type OverviewWithZh = PaperOverview & {
   abstract_summary_zh?: string | null;
   overall_summary_zh?: string | null;
@@ -29,6 +33,7 @@ type OverviewWithZh = PaperOverview & {
   }> | null;
 };
 
+// Render overview sections and overview-level highlights.
 export default function OverviewPanel({
   paperId,
   overview,

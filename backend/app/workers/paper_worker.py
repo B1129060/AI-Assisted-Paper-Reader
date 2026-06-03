@@ -1,3 +1,5 @@
+# Queue consumer loop for parse, translation, and overview regeneration tasks.
+
 import logging
 import threading
 import time
@@ -22,6 +24,7 @@ from app.services.task_service import (
 logger = logging.getLogger(__name__)
 
 
+# Start a daemon heartbeat thread for the claimed task.
 def _start_heartbeat(task_id: int) -> tuple[threading.Event, threading.Thread]:
     stop_event = threading.Event()
     interval = max(1, settings.WORKER_HEARTBEAT_INTERVAL_SECONDS)
@@ -48,6 +51,7 @@ def _start_heartbeat(task_id: int) -> tuple[threading.Event, threading.Thread]:
     return stop_event, thread
 
 
+# Dispatch one claimed task to the service that owns its task type.
 def process_task(task: Task) -> None:
     db = SessionLocal()
     try:
@@ -68,6 +72,7 @@ def process_task(task: Task) -> None:
         db.close()
 
 
+# Recover stale work, claim one queued task, and process it once.
 def run_worker_once() -> bool:
     db = SessionLocal()
     try:
@@ -106,6 +111,7 @@ def run_worker_once() -> bool:
         db.close()
 
 
+# Run the worker polling loop until the process is stopped.
 def run_worker_forever() -> None:
     logger.info(
         "Paper worker started poll_interval_seconds=%s max_attempts=%s task_timeout_minutes=%s heartbeat_interval_seconds=%s",

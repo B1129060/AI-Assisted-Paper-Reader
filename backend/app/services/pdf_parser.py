@@ -1,3 +1,5 @@
+# PDF parsing coordinator for markdown extraction, chunking, and PDF position extraction.
+
 import os
 from app.config import settings
 from app.services.extractors.pymupdf4llm_extractor import (
@@ -20,6 +22,7 @@ DEBUG_DIR = os.path.join(
 )
 
 
+# Extract markdown, clean blocks, build chunks, and attach position data.
 def parse_pdf_to_chunks(pdf_path: str, debug: bool = False):
     extractor = settings.PDF_EXTRACTOR.lower()
 

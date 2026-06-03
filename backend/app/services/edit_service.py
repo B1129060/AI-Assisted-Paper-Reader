@@ -1,3 +1,5 @@
+# LLM-backed regeneration helpers used after paragraph and bullet-list edits.
+
 import json
 import re
 from typing import Any, Dict, List
@@ -19,6 +21,7 @@ if getattr(settings, "LLM_BASE_URL", None):
 client = OpenAI(**client_kwargs)
 
 
+# Internal helper for extract json object.
 def _extract_json_object(content: str) -> dict:
     content = content.strip()
 
@@ -45,6 +48,7 @@ def _extract_json_object(content: str) -> dict:
     return {}
 
 
+# Internal helper for call json llm.
 def _call_json_llm(prompt: str) -> dict:
     response = client.chat.completions.create(
         model=settings.LLM_MODEL,
@@ -65,6 +69,7 @@ def _call_json_llm(prompt: str) -> dict:
     return _extract_json_object(content)
 
 
+# Make section key.
 def make_section_key(section_title: str) -> str:
     text = (section_title or "").strip().lower()
     text = re.sub(r"[^\w\s]", " ", text)
@@ -72,6 +77,7 @@ def make_section_key(section_title: str) -> str:
     return text
 
 
+# Internal helper for parse json list.
 def _parse_json_list(raw: str | None) -> list:
     if not raw:
         return []
@@ -82,6 +88,7 @@ def _parse_json_list(raw: str | None) -> list:
         return []
 
 
+# Remove one section summary entry when its section no longer has content.
 def remove_section_summary_from_overview(
     db: Session,
     paper_id: int,
@@ -128,6 +135,7 @@ def remove_section_summary_from_overview(
     )
 
 
+# Regenerate summary and key points for one edited paragraph.
 def regenerate_paragraph_fields(text: str) -> dict:
     prompt = f"""
 You are processing one academic paragraph.
@@ -167,6 +175,7 @@ PARAGRAPH:
     }
 
 
+# Regenerate section summary en.
 def regenerate_section_summary_en(section_title: str, paragraph_summaries: List[str]) -> str:
     source = "\n".join([f"- {s}" for s in paragraph_summaries if s and s.strip()])
 
@@ -197,6 +206,7 @@ SOURCE:
     return str(data.get("summary", "")).strip()
 
 
+# Regenerate section summary zh.
 def regenerate_section_summary_zh(section_title: str, paragraph_summaries_zh: List[str]) -> str:
     source = "\n".join([f"- {s}" for s in paragraph_summaries_zh if s and s.strip()])
 
@@ -227,6 +237,7 @@ def regenerate_section_summary_zh(section_title: str, paragraph_summaries_zh: Li
     return str(data.get("summary", "")).strip()
 
 
+# Build section summaries for regeneration.
 def build_section_summaries_for_regeneration(
     paragraph_summaries_en: List[str],
     paragraph_summaries_zh: List[str],
@@ -241,6 +252,7 @@ def build_section_summaries_for_regeneration(
     return clean_en, clean_zh
 
 
+# Update one section summary entry in the stored overview.
 def update_section_summary_in_overview(
     db: Session,
     paper_id: int,
@@ -305,6 +317,7 @@ def update_section_summary_in_overview(
     overview.section_summaries = json.dumps(section_summaries, ensure_ascii=False)
     overview.section_summaries_zh = json.dumps(section_summaries_zh, ensure_ascii=False)
 
+# Regenerate summary and key points for one edited bullet list.
 def regenerate_bullet_fields(intro_text: str | None, items: List[str]) -> dict:
     intro = (intro_text or "").strip()
     clean_items = [str(x).strip() for x in items if str(x).strip()]

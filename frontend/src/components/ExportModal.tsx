@@ -1,11 +1,15 @@
+// Modal for choosing export contents and downloading the generated PDF or ZIP.
+
 import { useState } from "react";
 import { exportPaper } from "../api/papers";
 
+// Component props for this file.
 type Props = {
   paperId: number;
   onClose: () => void;
 };
 
+// Collect export options and trigger a file download from the export API.
 export default function ExportModal({ paperId, onClose }: Props) {
   const [includePdf, setIncludePdf] = useState(true);
   const [includeOverview, setIncludeOverview] = useState(true);

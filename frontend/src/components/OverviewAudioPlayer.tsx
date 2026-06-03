@@ -1,12 +1,20 @@
+// Browser speech-synthesis player for overview and paragraph content.
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Element, PaperOverview } from "../types/paper";
 
+// Data structure for audio language.
 type AudioLanguage = "en" | "zh";
+// Data structure for audio source.
 type AudioSource = "overview" | "selected_paragraph" | "all_paragraphs";
+// Data structure for overview part.
 type OverviewPart = "all" | "abstract" | "overall" | "key_points" | "sections" | "highlights";
+// Data structure for paragraph part.
 type ParagraphPart = "all" | "text" | "summary" | "key_points";
+// Data structure for player state.
 type PlayerState = "idle" | "playing" | "paused";
 
+// Component props for this file.
 type Props = {
   currentLanguage: AudioLanguage;
   activeElementId: number | null;
@@ -16,6 +24,7 @@ type Props = {
   chineseElements?: Element[];
 };
 
+// Data structure for audio segment.
 type AudioSegment = {
   text: string;
   lang: AudioLanguage;
@@ -23,19 +32,25 @@ type AudioSegment = {
   pauseAfterMs?: number;
 };
 
+// Data structure for pause segment.
 type PauseSegment = {
   pauseMs: number;
 };
 
+// Data structure for playback unit.
 type PlaybackUnit = AudioSegment | PauseSegment;
 
+// Max segment length.
 const MAX_SEGMENT_LENGTH = 240;
+// Default rate.
 const DEFAULT_RATE = 1.0;
 
+// Is pause segment.
 function isPauseSegment(segment: PlaybackUnit): segment is PauseSegment {
   return "pauseMs" in segment;
 }
 
+// Is voice compatible with language.
 function isVoiceCompatibleWithLanguage(
   voice: SpeechSynthesisVoice | null | undefined,
   language: AudioLanguage,
@@ -51,6 +66,7 @@ function isVoiceCompatibleWithLanguage(
   return lang.startsWith("en");
 }
 
+// Get label text.
 function getLabelText(labelKey: "original" | "summary" | "key_points" | "paragraph", lang: AudioLanguage, index?: number) {
   if (lang === "zh") {
     if (labelKey === "original") return "原文。";
@@ -65,6 +81,7 @@ function getLabelText(labelKey: "original" | "summary" | "key_points" | "paragra
   return index ? `Paragraph ${index}.` : "Paragraph.";
 }
 
+// Clean text.
 function cleanText(value?: string | null, _lang: AudioLanguage = "en") {
   return (value || "")
     .replace(/\s+/g, " ")
@@ -74,6 +91,7 @@ function cleanText(value?: string | null, _lang: AudioLanguage = "en") {
     .trim();
 }
 
+// Split long text.
 function splitLongText(text: string) {
   const sentenceParts = text
     .split(/(?<=[。！？；.!?;])\s*/)
@@ -115,10 +133,12 @@ function splitLongText(text: string) {
   return result;
 }
 
+// Push pause.
 function pushPause(segments: PlaybackUnit[], pauseMs = 420) {
   segments.push({ pauseMs });
 }
 
+// Push text.
 function pushText(
   segments: PlaybackUnit[],
   value: string | null | undefined,
@@ -148,15 +168,18 @@ function pushText(
   });
 }
 
+// Get readable element preview.
 function getReadableElementPreview(element: Element) {
   const source = cleanText(element.summary || element.text || element.intro_text || element.items?.[0] || "", "en");
   return source.length > 58 ? `${source.slice(0, 58)}...` : source || `Paragraph ${element.paragraph_id}`;
 }
 
+// Get readable elements.
 function getReadableElements(elements: Element[]) {
   return elements.filter((element) => element.type === "paragraph" || element.type === "bullet_list");
 }
 
+// Build overview segments.
 function buildOverviewSegments(
   overview: PaperOverview | null | undefined,
   lang: AudioLanguage,
@@ -206,6 +229,7 @@ function buildOverviewSegments(
   return segments;
 }
 
+// Push element original text.
 function pushElementOriginalText(segments: PlaybackUnit[], element: Element, lang: AudioLanguage) {
   if (element.type === "bullet_list") {
     pushText(segments, element.intro_text, lang, {
@@ -223,6 +247,7 @@ function pushElementOriginalText(segments: PlaybackUnit[], element: Element, lan
   });
 }
 
+// Push element summary.
 function pushElementSummary(segments: PlaybackUnit[], element: Element, lang: AudioLanguage) {
   pushText(segments, element.summary, lang, {
     label: getLabelText("summary", lang),
@@ -230,6 +255,7 @@ function pushElementSummary(segments: PlaybackUnit[], element: Element, lang: Au
   });
 }
 
+// Push element key points.
 function pushElementKeyPoints(segments: PlaybackUnit[], element: Element, lang: AudioLanguage) {
   if (!element.key_points?.length) return;
 
@@ -238,6 +264,7 @@ function pushElementKeyPoints(segments: PlaybackUnit[], element: Element, lang: 
   pushPause(segments, 520);
 }
 
+// Build paragraph segments.
 function buildParagraphSegments(
   element: Element | null | undefined,
   lang: AudioLanguage,
@@ -266,6 +293,7 @@ function buildParagraphSegments(
   return segments;
 }
 
+// Build all paragraph segments.
 function buildAllParagraphSegments(elements: Element[], lang: AudioLanguage, paragraphPart: ParagraphPart) {
   const readableElements = getReadableElements(elements);
   const segments: PlaybackUnit[] = [];
@@ -278,6 +306,7 @@ function buildAllParagraphSegments(elements: Element[], lang: AudioLanguage, par
   return segments;
 }
 
+// Find best voice.
 function findBestVoice(voices: SpeechSynthesisVoice[], language: AudioLanguage) {
   const compatibleVoices = voices.filter((voice) =>
     isVoiceCompatibleWithLanguage(voice, language),
@@ -299,10 +328,12 @@ function findBestVoice(voices: SpeechSynthesisVoice[], language: AudioLanguage) 
   return compatibleVoices[0] || null;
 }
 
+// Get content segment count.
 function getContentSegmentCount(segments: PlaybackUnit[]) {
   return segments.filter((segment) => !isPauseSegment(segment)).length;
 }
 
+// Get current speakable index.
 function getCurrentSpeakableIndex(segments: PlaybackUnit[], currentIndex: number) {
   if (currentIndex < 0) return 0;
   let count = 0;
@@ -312,6 +343,7 @@ function getCurrentSpeakableIndex(segments: PlaybackUnit[], currentIndex: number
   return count;
 }
 
+// Get next content index.
 function getNextContentIndex(segments: PlaybackUnit[], fromIndex: number, direction: 1 | -1) {
   let index = fromIndex + direction;
   while (index >= 0 && index < segments.length) {
@@ -322,6 +354,7 @@ function getNextContentIndex(segments: PlaybackUnit[], fromIndex: number, direct
   return Math.min(Math.max(fromIndex, 0), Math.max(segments.length - 1, 0));
 }
 
+// Build and play speech-synthesis segments for overview and paragraph content.
 export default function OverviewAudioPlayer({
   currentLanguage,
   activeElementId,

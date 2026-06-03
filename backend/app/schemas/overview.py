@@ -1,18 +1,23 @@
+# Pydantic schemas for standalone overview response payloads.
+
 from pydantic import BaseModel
 from typing import List
 
 
+# Overview highlight summary item returned to the frontend.
 class HighlightSummary(BaseModel):
     element_id: int
     title: str
     summary: str
 
 
+# Overview section summary item returned to the frontend.
 class SectionSummary(BaseModel):
     section_title: str
     summary: str
 
 
+# Paper overview response returned by overview endpoints.
 class PaperOverviewResponse(BaseModel):
     paper_id: int
     language: str

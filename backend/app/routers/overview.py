@@ -1,3 +1,5 @@
+# API routes for reading the paper overview and queueing overview regeneration.
+
 import json
 import logging
 
@@ -22,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/{paper_id}/overview", response_model=PaperOverviewResponse)
+# Return one paper overview in English or Chinese fallback mode.
 def get_paper_overview(
     paper_id: int,
     lang: str = Query("en", pattern="^(en|zh)$"),
@@ -80,6 +83,7 @@ def get_paper_overview(
 
 
 @router.post("/{paper_id}/regenerate-overview")
+# Queue overview regeneration when parsing is complete and no duplicate task is active.
 def regenerate_paper_overview(
     paper_id: int,
     db: Session = Depends(get_db),

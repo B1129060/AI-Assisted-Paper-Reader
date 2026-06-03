@@ -1,3 +1,5 @@
+# Chunk-level LLM processor that converts cleaned chunk text into structured reading elements.
+
 import json
 import re
 from typing import List, Dict, Any, Tuple
@@ -18,6 +20,7 @@ if getattr(settings, "LLM_BASE_URL", None):
 client = OpenAI(**client_kwargs)
 
 
+# Internal helper for normalize text.
 def _normalize_text(text: str) -> str:
     text = text.replace("\u00a0", " ")
     text = re.sub(r"\r\n?", "\n", text)
@@ -26,12 +29,14 @@ def _normalize_text(text: str) -> str:
     return text.strip()
 
 
+# Internal helper for strip markdown emphasis.
 def _strip_markdown_emphasis(text: str) -> str:
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"_(.*?)_", r"\1", text)
     return text.strip()
 
 
+# Internal helper for looks like caption.
 def _looks_like_caption(text: str) -> bool:
     t = text.strip()
     return bool(
@@ -40,6 +45,7 @@ def _looks_like_caption(text: str) -> bool:
     )
 
 
+# Internal helper for looks like header footer.
 def _looks_like_header_footer(text: str) -> bool:
     t = text.lower()
     if "ieee transactions on" in t:
@@ -51,6 +57,7 @@ def _looks_like_header_footer(text: str) -> bool:
     return False
 
 
+# Internal helper for looks like formula noise.
 def _looks_like_formula_noise(text: str) -> bool:
     t = text.strip()
 
@@ -65,6 +72,7 @@ def _looks_like_formula_noise(text: str) -> bool:
     return ratio > 0.45
 
 
+# Internal helper for is good reading text.
 def _is_good_reading_text(text: str) -> bool:
     t = text.strip()
 
@@ -79,6 +87,7 @@ def _is_good_reading_text(text: str) -> bool:
 
     return True
 
+# Internal helper for looks like subsection heading.
 def _looks_like_subsection_heading(text: str) -> bool:
     t = text.strip()
 
@@ -97,6 +106,7 @@ def _looks_like_subsection_heading(text: str) -> bool:
     return False
 
 
+# Internal helper for looks like inline label.
 def _looks_like_inline_label(text: str) -> bool:
     t = text.strip()
 
@@ -109,6 +119,7 @@ def _looks_like_inline_label(text: str) -> bool:
     return False
 
 
+# Internal helper for looks like main section heading.
 def _looks_like_main_section_heading(text: str) -> bool:
     t = text.strip()
 
@@ -142,11 +153,13 @@ def _looks_like_main_section_heading(text: str) -> bool:
 
     return False
 
+# Internal helper for is decimal subsection heading.
 def _is_decimal_subsection_heading(text: str) -> bool:
     t = text.strip()
     return bool(re.match(r"^\d+\.\d+(\.\d+)*\s+\S+", t))
 
 
+# Internal helper for is alpha subsection heading.
 def _is_alpha_subsection_heading(text: str) -> bool:
     t = text.strip()
     return bool(
@@ -155,6 +168,7 @@ def _is_alpha_subsection_heading(text: str) -> bool:
     )
 
 
+# Internal helper for looks like fake heading.
 def _looks_like_fake_heading(text: str) -> bool:
     t = text.strip()
 
@@ -170,18 +184,21 @@ def _looks_like_fake_heading(text: str) -> bool:
     return False
 
 
+# Internal helper for fallback split chunk.
 def _fallback_split_chunk(chunk_text: str) -> List[str]:
     text = _normalize_text(chunk_text)
     parts = [p.strip() for p in text.split("\n\n") if p.strip()]
     return [p for p in parts if _is_good_reading_text(p)]
 
 
+# Internal helper for fallback summary.
 def _fallback_summary(text: str) -> str:
     sentences = re.split(r"(?<=[.!?])\s+", text)
     first = sentences[0].strip() if sentences else text.strip()
     return first[:180]
 
 
+# Internal helper for fallback key points.
 def _fallback_key_points(text: str) -> List[str]:
     text = text.strip()
     if len(text) <= 120:
@@ -197,6 +214,7 @@ def _fallback_key_points(text: str) -> List[str]:
     return points
 
 
+# Internal helper for build prompt.
 def _build_prompt(chunk_text: str, section_title: str) -> str:
     return f"""
 You are processing a chunk from a scientific paper.
@@ -323,6 +341,7 @@ TEXT:
 """.strip()
 
 
+# Internal helper for extract json object.
 def _extract_json_object(content: str) -> dict:
     content = content.strip()
 
@@ -351,6 +370,7 @@ def _extract_json_object(content: str) -> dict:
     return {"elements": []}
 
 
+# Internal helper for empty usage.
 def _empty_usage() -> dict:
     return {
         "input": 0,
@@ -359,6 +379,7 @@ def _empty_usage() -> dict:
     }
 
 
+# Internal helper for call llm.
 def _call_llm(prompt: str, chunk_index: int) -> Tuple[dict, dict]:
     max_attempts = 3  # 第1次 + 額外重試2次
 
@@ -418,6 +439,7 @@ def _call_llm(prompt: str, chunk_index: int) -> Tuple[dict, dict]:
             raise
 
 
+# Convert one chunk into structured elements and return token usage.
 def process_chunk_with_llm(
     chunk_text: str,
     section_title: str,

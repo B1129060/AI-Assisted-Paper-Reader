@@ -1,7 +1,10 @@
+// Frontend API client for paper, upload, translation, edit, export, delete, and title operations.
+
 import type { PaperDetail, PaperListItem } from "../types/paper";
 
 import { API_BASE } from "./apiConfig";
 
+// Get error message.
 async function getErrorMessage(res: Response, fallback: string) {
   try {
     const data = await res.json();
@@ -26,6 +29,7 @@ async function getErrorMessage(res: Response, fallback: string) {
   return fallback;
 }
 
+// Fetch the current user's paper list.
 export async function fetchPapers(): Promise<PaperListItem[]> {
   const res = await fetch(`${API_BASE}/papers/`);
   if (!res.ok) {
@@ -34,6 +38,7 @@ export async function fetchPapers(): Promise<PaperListItem[]> {
   return res.json();
 }
 
+// Fetch one paper detail payload for the selected language.
 export async function fetchPaperDetail(
   paperId: number,
   lang: "en" | "zh" = "en"
@@ -45,6 +50,7 @@ export async function fetchPaperDetail(
   return res.json();
 }
 
+// Upload a PDF file and return the queued paper status.
 export async function uploadPaper(file: File): Promise<{
   paper_id: number;
   parse_status: string;
@@ -66,6 +72,7 @@ export async function uploadPaper(file: File): Promise<{
   return res.json();
 }
 
+// Translate paper to zh.
 export async function translatePaperToZh(
   paperId: number
 ): Promise<{ paper_id: number; status: string }> {
@@ -80,6 +87,7 @@ export async function translatePaperToZh(
   return res.json();
 }
 
+// Update paragraph.
 export async function updateParagraph(
   paragraphId: number,
   text: string
@@ -99,6 +107,7 @@ export async function updateParagraph(
   return res.json();
 }
 
+// Update bullet list.
 export async function updateBulletList(
   paragraphId: number,
   introText: string,
@@ -122,6 +131,7 @@ export async function updateBulletList(
   return res.json();
 }
 
+// Insert paragraph after.
 export async function insertParagraphAfter(
   paragraphId: number,
   text: string
@@ -141,6 +151,7 @@ export async function insertParagraphAfter(
   return res.json();
 }
 
+// Delete paragraph.
 export async function deleteParagraph(
   paragraphId: number
 ): Promise<{ paragraph_id: number; paper_id: number; section_title: string | null; status: string }> {
@@ -155,6 +166,7 @@ export async function deleteParagraph(
   return res.json();
 }
 
+// Request options controlling which export files and highlights are included.
 export type ExportOptions = {
   include_pdf: boolean;
   include_overview: boolean;
@@ -164,6 +176,7 @@ export type ExportOptions = {
   include_text_highlights: boolean;
 };
 
+// Export paper.
 export async function exportPaper(
   paperId: number,
   options: ExportOptions
@@ -189,6 +202,7 @@ export async function exportPaper(
   return { blob, filename };
 }
 
+// Delete paper.
 export async function deletePaper(
   paperId: number
 ): Promise<{
@@ -208,6 +222,7 @@ export async function deletePaper(
   return res.json();
 }
 
+// Update paper title.
 export async function updatePaperTitle(
   paperId: number,
   title: string

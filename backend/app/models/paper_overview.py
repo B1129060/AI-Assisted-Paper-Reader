@@ -1,9 +1,12 @@
+# Database model for one paper-level overview row and its translated fields.
+
 from sqlalchemy import Column, Integer, ForeignKey, Text, String, DateTime
 from sqlalchemy.sql import func
 
 from app.database import Base
 
 
+# Stored paper-level overview and optional translated overview fields.
 class PaperOverview(Base):
     __tablename__ = "paper_overviews"
 

@@ -1,3 +1,5 @@
+// Home page for listing papers, uploading PDFs, renaming, deleting, exporting, and polling processing status.
+
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { PaperListItem } from "../types/paper";
 import {
@@ -8,24 +10,30 @@ import {
 } from "../api/papers";
 import ExportModal from "../components/ExportModal";
 
+// Component props for this file.
 type Props = {
   onOpenReader: (paperId: number) => void;
 };
 
+// Data structure for overall paper status.
 type OverallPaperStatus = "ready" | "processing" | "failed";
 
+// Data structure for load papers options.
 type LoadPapersOptions = {
   silent?: boolean;
 };
 
+// Get paper display title.
 function getPaperDisplayTitle(paper: PaperListItem) {
   return paper.title || paper.original_filename || `Paper ${paper.paper_id}`;
 }
 
+// Normalize status.
 function normalizeStatus(status: string | null | undefined) {
   return (status || "").toLowerCase();
 }
 
+// Get overall paper status.
 function getOverallPaperStatus(paper: PaperListItem): OverallPaperStatus {
   const parseStatus = normalizeStatus(paper.parse_status);
   const overviewStatus = normalizeStatus(paper.overview_status);
@@ -52,12 +60,14 @@ function getOverallPaperStatus(paper: PaperListItem): OverallPaperStatus {
   return "ready";
 }
 
+// Get overall status label.
 function getOverallStatusLabel(status: OverallPaperStatus) {
   if (status === "failed") return "Failed";
   if (status === "processing") return "Processing";
   return "Ready";
 }
 
+// Get overall status message.
 function getOverallStatusMessage(status: OverallPaperStatus) {
   if (status === "failed") {
     return "部分生成內容需要處理，請開啟論文查看可用的恢復方式。";
@@ -70,6 +80,7 @@ function getOverallStatusMessage(status: OverallPaperStatus) {
   return null;
 }
 
+// Get friendly paper error.
 function getFriendlyPaperError(message?: string | null) {
   if (!message) return null;
 
@@ -98,6 +109,7 @@ function getFriendlyPaperError(message?: string | null) {
   return "系統處理時發生錯誤，請開啟論文查看或稍後再試。";
 }
 
+// Get primary error message.
 function getPrimaryErrorMessage(paper: PaperListItem) {
   const parseStatus = normalizeStatus(paper.parse_status);
   const overviewStatus = normalizeStatus(paper.overview_status);
@@ -118,10 +130,12 @@ function getPrimaryErrorMessage(paper: PaperListItem) {
   return getFriendlyPaperError(paper.last_error_message || null);
 }
 
+// Has processing paper.
 function hasProcessingPaper(papers: PaperListItem[]) {
   return papers.some((paper) => getOverallPaperStatus(paper) === "processing");
 }
 
+// Paper library page with upload, list refresh, rename, export, and delete controls.
 export default function HomePage({ onOpenReader }: Props) {
   const [papers, setPapers] = useState<PaperListItem[]>([]);
   const [loading, setLoading] = useState(false);

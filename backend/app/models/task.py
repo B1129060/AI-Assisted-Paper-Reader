@@ -1,9 +1,12 @@
+# Database model for background worker tasks and retry/heartbeat metadata.
+
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
 
 from app.database import Base
 
 
+# Background queue row used by worker processes.
 class Task(Base):
     __tablename__ = "tasks"
 

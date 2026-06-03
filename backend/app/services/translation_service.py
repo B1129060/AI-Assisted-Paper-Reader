@@ -1,3 +1,5 @@
+# LLM-backed English to Traditional Chinese translation workflow for elements and overviews.
+
 import json
 import re
 from typing import Any, Dict, List
@@ -16,6 +18,7 @@ if getattr(settings, "LLM_BASE_URL", None):
 client = OpenAI(**client_kwargs)
 
 
+# Internal helper for sanitize string for json.
 def _sanitize_string_for_json(text: Any) -> str:
     if text is None:
         return ""
@@ -26,6 +29,7 @@ def _sanitize_string_for_json(text: Any) -> str:
     return text
 
 
+# Internal helper for sanitize json data.
 def _sanitize_json_data(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {str(k): _sanitize_json_data(v) for k, v in obj.items()}
@@ -38,6 +42,7 @@ def _sanitize_json_data(obj: Any) -> Any:
     return _sanitize_string_for_json(obj)
 
 
+# Internal helper for extract json object.
 def _extract_json_object(content: str) -> dict:
     content = content.strip()
 
@@ -64,6 +69,7 @@ def _extract_json_object(content: str) -> dict:
     return {}
 
 
+# Internal helper for call json llm.
 def _call_json_llm(prompt: str) -> dict:
     prompt = _sanitize_string_for_json(prompt)
 
@@ -86,6 +92,7 @@ def _call_json_llm(prompt: str) -> dict:
     return _extract_json_object(content)
 
 
+# Internal helper for translate element batch.
 def _translate_element_batch(batch: List[dict]) -> Dict[int, dict]:
     payload = []
     original_map: Dict[int, dict] = {}
@@ -194,6 +201,7 @@ INPUT:
     return results
 
 
+# Translate element batches to Traditional Chinese with per-element fallback.
 def translate_elements_to_zh(elements: List[dict], batch_size: int = 8) -> Dict[int, dict]:
     results: Dict[int, dict] = {}
 
@@ -223,6 +231,7 @@ def translate_elements_to_zh(elements: List[dict], batch_size: int = 8) -> Dict[
     return results
 
 
+# Translate overview to zh.
 def translate_overview_to_zh(overview: dict) -> dict:
     payload = {
         "abstract_summary": overview.get("abstract_summary", ""),
@@ -311,6 +320,7 @@ from app.models.paper_overview import PaperOverview
 logger = logging.getLogger(__name__)
 
 
+# Detect older translated bullet lists missing intro_text_zh.
 def _has_missing_intro_text_zh(paragraphs: list[Paragraph]) -> bool:
     return any(
         p.type == "bullet_list"
@@ -320,6 +330,7 @@ def _has_missing_intro_text_zh(paragraphs: list[Paragraph]) -> bool:
     )
 
 
+# Internal helper for safe json loads.
 def _safe_json_loads(raw: str | None, fallback: Any = None) -> Any:
     if not raw:
         return fallback
@@ -329,6 +340,7 @@ def _safe_json_loads(raw: str | None, fallback: Any = None) -> Any:
         return fallback
 
 
+# Worker implementation for writing Chinese translation fields.
 def process_translate_zh_task(db: Session, paper_id: int, user_id: int | None = None) -> None:
     """Translate a paper to Traditional Chinese in a background worker.
 

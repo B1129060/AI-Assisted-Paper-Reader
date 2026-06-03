@@ -1,3 +1,5 @@
+# Worker-side parse_overview task implementation and database write workflow.
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -19,15 +21,18 @@ from app.services.overview_generator import (
 logger = logging.getLogger(__name__)
 
 
+# Utc now.
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Internal helper for short.
 def _short(prefix: str, error: Exception | str) -> str:
     raw = str(error).strip() or "Unknown error"
     return f"{prefix}: {raw[:500]}"
 
 
+# Internal helper for insert paragraphs from elements.
 def _insert_paragraphs_from_elements(db: Session, paper_id: int, elements: list[dict]) -> list[dict]:
     db.query(Paragraph).filter(Paragraph.paper_id == paper_id).delete()
     db.flush()
@@ -105,6 +110,7 @@ def _insert_paragraphs_from_elements(db: Session, paper_id: int, elements: list[
     return returned_elements
 
 
+# Internal helper for generate initial overview.
 def _generate_initial_overview(db: Session, paper: Paper, elements: list[dict]) -> None:
     logger.info("Initial overview generation started user_id=%s paper_id=%s elements=%s", paper.user_id, paper.id, len(elements))
 
@@ -138,6 +144,7 @@ def _generate_initial_overview(db: Session, paper: Paper, elements: list[dict]) 
     logger.info("Initial overview completed user_id=%s paper_id=%s", paper.user_id, paper.id)
 
 
+# Worker implementation for parsing a paper and writing initial overview rows.
 def process_parse_overview_task(db: Session, paper_id: int) -> None:
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:

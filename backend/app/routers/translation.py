@@ -1,3 +1,5 @@
+# API route for queueing Traditional Chinese translation after prerequisites are ready.
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,6 +23,7 @@ router = APIRouter(prefix="/papers", tags=["Translation"])
 logger = logging.getLogger(__name__)
 
 
+# Detect older translated bullet lists missing intro_text_zh.
 def _has_missing_intro_text_zh(paragraphs: list[Paragraph]) -> bool:
     return any(
         p.type == "bullet_list"
@@ -31,6 +34,7 @@ def _has_missing_intro_text_zh(paragraphs: list[Paragraph]) -> bool:
 
 
 @router.post("/{paper_id}/translate-zh")
+# Queue Chinese translation once parse and overview are complete.
 def translate_paper_to_zh(
     paper_id: int,
     db: Session = Depends(get_db),

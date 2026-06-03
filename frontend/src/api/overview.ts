@@ -1,7 +1,10 @@
+// Frontend API client for paper overview loading and regeneration.
+
 import type { PaperOverview } from "../types/paper";
 
 import { API_BASE } from "./apiConfig";
 
+// Get error message.
 async function getErrorMessage(res: Response, fallback: string) {
   try {
     const data = await res.json();
@@ -25,6 +28,7 @@ async function getErrorMessage(res: Response, fallback: string) {
   return fallback;
 }
 
+// Fetch the paper-level overview for one language.
 export async function fetchPaperOverview(
   paperId: number,
   lang: "en" | "zh" = "en"
@@ -36,6 +40,7 @@ export async function fetchPaperOverview(
   return res.json();
 }
 
+// Regenerate overview.
 export async function regenerateOverview(
   paperId: number
 ): Promise<{ paper_id: number; status: string }> {

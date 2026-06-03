@@ -1,3 +1,5 @@
+# PDF/ZIP export utilities for original PDFs, annotated PDFs, overviews, paragraphs, and highlights.
+
 import io
 import json
 import os
@@ -26,6 +28,7 @@ FONT_NAME = "NotoSansTC"
 _FONT_READY = False
 
 
+# Register the CJK-capable export font once per process.
 def ensure_export_font():
     global _FONT_READY
     if _FONT_READY:
@@ -47,6 +50,7 @@ def ensure_export_font():
     _FONT_READY = True
 
 
+# Convert a paper title or filename into a safe export filename stem.
 def safe_filename(name: str) -> str:
     if not name:
         return "paper"
@@ -56,6 +60,7 @@ def safe_filename(name: str) -> str:
     return name[:80] or "paper"
 
 
+# Escape text before passing it to reportlab Paragraph markup.
 def escape_text(text: str | None) -> str:
     if not text:
         return ""
@@ -68,6 +73,7 @@ def escape_text(text: str | None) -> str:
     )
 
 
+# Parse a JSON-string field with a safe default fallback.
 def parse_json_field(raw: str | None, default: Any):
     if not raw:
         return default
@@ -77,6 +83,7 @@ def parse_json_field(raw: str | None, default: Any):
         return default
 
 
+# Build reportlab paragraph styles used by export PDFs.
 def build_styles():
     ensure_export_font()
     base = getSampleStyleSheet()
@@ -164,6 +171,7 @@ def build_styles():
     }
 
 
+# Map highlight color names to export background colors.
 def color_hex(color: str) -> str:
     return {
         "yellow": "#FFF3A3",
@@ -172,6 +180,7 @@ def color_hex(color: str) -> str:
     }.get(color, "#FFF3A3")
 
 
+# Apply non-overlapping text highlights to escaped reportlab markup.
 def apply_text_highlights(
     text: str | None,
     highlights: list[dict[str, Any]],
@@ -216,6 +225,7 @@ def apply_text_highlights(
     return "".join(parts)
 
 
+# Select highlights for one paper field, item, language, and paragraph.
 def filter_text_highlights(
     text_highlights: list[dict[str, Any]],
     *,
@@ -238,6 +248,7 @@ def filter_text_highlights(
     ]
 
 
+# Draw stored PDF highlights onto the original PDF and return PDF bytes.
 def create_annotated_pdf(
     original_pdf_path: str,
     pdf_highlights: list[dict[str, Any]],
@@ -285,6 +296,7 @@ def create_annotated_pdf(
     return buffer.getvalue()
 
 
+# Build English/Chinese text blocks according to export language mode.
 def build_bilingual_blocks(
     *,
     language_mode: str,
@@ -304,6 +316,7 @@ def build_bilingual_blocks(
     return blocks
 
 
+# Render overview content into a standalone PDF.
 def create_overview_pdf(
     *,
     paper: dict[str, Any],
@@ -591,6 +604,7 @@ def create_overview_pdf(
     return buffer.getvalue()
 
 
+# Render paragraph-level content into a standalone PDF.
 def create_paragraphs_pdf(
     *,
     paper: dict[str, Any],
@@ -901,6 +915,7 @@ def create_paragraphs_pdf(
     return buffer.getvalue()
 
 
+# Package generated export files into an in-memory ZIP.
 def package_files_as_zip(files: dict[str, bytes]) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:

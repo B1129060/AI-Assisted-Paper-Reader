@@ -1,3 +1,5 @@
+# Ownership guards for paper, paragraph, and highlight resources.
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,7 @@ from app.models.paragraph import Paragraph
 from app.models.user import User
 
 
+# Return a paper only when it belongs to the current user.
 def get_owned_paper_or_404(
     db: Session,
     paper_id: int,
@@ -28,6 +31,7 @@ def get_owned_paper_or_404(
     return paper
 
 
+# Get owned paragraph or 404.
 def get_owned_paragraph_or_404(
     db: Session,
     paragraph_id: int,
@@ -47,6 +51,7 @@ def get_owned_paragraph_or_404(
     return paragraph
 
 
+# Ensure paragraph belongs to owned paper.
 def ensure_paragraph_belongs_to_owned_paper(
     db: Session,
     paragraph_id: int | None,
@@ -71,6 +76,7 @@ def ensure_paragraph_belongs_to_owned_paper(
     return paragraph
 
 
+# Get owned text highlight or 404.
 def get_owned_text_highlight_or_404(
     db: Session,
     highlight_id: int,
@@ -90,6 +96,7 @@ def get_owned_text_highlight_or_404(
     return highlight
 
 
+# Get owned pdf highlight or 404.
 def get_owned_pdf_highlight_or_404(
     db: Session,
     highlight_id: int,

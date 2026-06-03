@@ -1,3 +1,5 @@
+// Text rendering component with text highlight creation/deletion and delayed hover translation.
+
 import {
   useEffect,
   useMemo,
@@ -9,6 +11,7 @@ import {
 import { createTextHighlight, deleteTextHighlight } from "../api/highlights";
 import type { HighlightColor, TextHighlight } from "../types/highlight";
 
+// Component props for this file.
 type Props = {
   paperId: number;
   paragraphId?: number | null;
@@ -26,14 +29,17 @@ type Props = {
   onDeleted: (highlightId: number) => void;
 };
 
+// Data structure for segment.
 type Segment =
   | { type: "plain"; text: string }
   | { type: "highlight"; text: string; highlight: TextHighlight };
 
+// Data structure for translation popover style.
 type TranslationPopoverStyle = CSSProperties & {
   "--translation-arrow-left"?: string;
 };
 
+// Normalize hover translation.
 function normalizeHoverTranslation(
   hoverTranslation?: string | string[] | null
 ): string | null {
@@ -49,6 +55,7 @@ function normalizeHoverTranslation(
   return text || null;
 }
 
+// Render highlight segments, create text highlights from selection, delete highlights, and show hover translation.
 export default function HighlightableText({
   paperId,
   paragraphId = null,

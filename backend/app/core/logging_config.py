@@ -1,3 +1,5 @@
+# Shared logging setup for API and worker processes.
+
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -5,6 +7,7 @@ from logging.handlers import RotatingFileHandler
 from app.config import settings
 
 
+# Configure console and rotating file handlers for API and worker logs.
 def setup_logging() -> None:
     """Configure console, application, and error log handlers.
 

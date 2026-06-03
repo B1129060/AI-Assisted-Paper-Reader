@@ -1,3 +1,5 @@
+# Centralized runtime settings loaded from .env and exposed as a typed settings object.
+
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -5,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+# Application settings loaded from environment variables.
 class Settings(BaseSettings):
     # Required in .env for deployment.
     # Example: postgresql://postgres:123456@localhost:5432/paper_reader

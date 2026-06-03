@@ -1,8 +1,11 @@
+# Paragraph result builder and PDF location matcher for structured LLM output.
+
 import re
 from difflib import SequenceMatcher
 from typing import List, Dict, Any, Optional, Set, Tuple
 
 
+# Internal helper for normalize for match.
 def _normalize_for_match(text: str) -> str:
     if not text:
         return ""
@@ -28,6 +31,7 @@ def _normalize_for_match(text: str) -> str:
     return text.lower().strip()
 
 
+# Internal helper for token overlap ratio.
 def _token_overlap_ratio(a: str, b: str) -> float:
     if not a or not b:
         return 0.0
@@ -40,6 +44,7 @@ def _token_overlap_ratio(a: str, b: str) -> float:
     return len(a_tokens & b_tokens) / max(len(a_tokens), 1)
 
 
+# Internal helper for get column.
 def _get_column(bbox):
     x0, y0, x1, y1 = bbox
     cx = (x0 + x1) / 2
@@ -51,6 +56,7 @@ def _get_column(bbox):
     return "center"
 
 
+# Internal helper for dedupe rects.
 def _dedupe_rects(rects: List[List[float]]) -> List[List[float]]:
     seen = set()
     result = []
@@ -65,12 +71,14 @@ def _dedupe_rects(rects: List[List[float]]) -> List[List[float]]:
     return result
 
 
+# Internal helper for extract roman heading prefix.
 def _extract_roman_heading_prefix(text: str) -> Optional[str]:
     norm = _normalize_for_match(text)
     m = re.match(r"^(i|ii|iii|iv|v|vi|vii|viii|ix|x)\.", norm)
     return m.group(1) if m else None
 
 
+# Internal helper for is heading like.
 def _is_heading_like(text: str) -> bool:
     norm = _normalize_for_match(text)
     if not norm:
@@ -89,11 +97,13 @@ def _is_heading_like(text: str) -> bool:
     return False
 
 
+# Internal helper for is bullet like.
 def _is_bullet_like(text: str) -> bool:
     stripped = (text or "").strip()
     return stripped.startswith("- ") or stripped.startswith("•")
 
 
+# Internal helper for looks like metadata box.
 def _looks_like_metadata_box(text: str) -> bool:
     norm = _normalize_for_match(text)
     if not norm:
@@ -149,6 +159,7 @@ def _looks_like_metadata_box(text: str) -> bool:
     return False
 
 
+# Internal helper for score text match.
 def _score_text_match(target_text: str, candidate_text: str) -> float:
     if not target_text or not candidate_text:
         return 0.0
@@ -174,10 +185,12 @@ def _score_text_match(target_text: str, candidate_text: str) -> float:
     return overlap * 0.72
 
 
+# Internal helper for word count.
 def _word_count(text: str) -> int:
     return len(_normalize_for_match(text).split())
 
 
+# Internal helper for confidence from word ratio.
 def _confidence_from_word_ratio(collected_words: int, paragraph_words: int) -> str:
     if paragraph_words <= 0:
         return "low"
@@ -191,6 +204,7 @@ def _confidence_from_word_ratio(collected_words: int, paragraph_words: int) -> s
     return "low"
 
 
+# Internal helper for merge bboxes list.
 def _merge_bboxes_list(boxes: List[dict]) -> List[List[float]]:
     if not boxes:
         return []
@@ -198,6 +212,7 @@ def _merge_bboxes_list(boxes: List[dict]) -> List[List[float]]:
     return _dedupe_rects([b["bbox"] for b in boxes if b.get("bbox")])
 
 
+# Internal helper for make pdf locations.
 def _make_pdf_locations(boxes: List[dict]) -> List[dict]:
     """
     將 matched boxes 轉成帶 page 的 locations。
@@ -225,6 +240,7 @@ def _make_pdf_locations(boxes: List[dict]) -> List[dict]:
     return locations
 
 
+# Internal helper for locations to primary page.
 def _locations_to_primary_page(locations: List[dict]) -> Optional[int]:
     """
     為了相容舊前端，仍保留單一 page_number。
@@ -237,6 +253,7 @@ def _locations_to_primary_page(locations: List[dict]) -> Optional[int]:
     return max(set(pages), key=pages.count)
 
 
+# Internal helper for build position page index.
 def _build_position_page_index(position_data: Optional[dict]) -> List[dict]:
     """
     建立 block index：
@@ -303,6 +320,7 @@ def _build_position_page_index(position_data: Optional[dict]) -> List[dict]:
     return indexed_pages
 
 
+# Internal helper for find best page for text.
 def _find_best_page_for_text(text: str, indexed_pages: List[dict]) -> Optional[int]:
     target = _normalize_for_match(text)
     if not target:
@@ -339,6 +357,7 @@ def _find_best_page_for_text(text: str, indexed_pages: List[dict]) -> Optional[i
     return best_page
 
 
+# Internal helper for make anchor lengths.
 def _make_anchor_lengths(target: str) -> Tuple[int, int]:
     n = len(target)
 
@@ -352,6 +371,7 @@ def _make_anchor_lengths(target: str) -> Tuple[int, int]:
     return max(8, n), 0
 
 
+# Internal helper for find all positions.
 def _find_all_positions(text: str, pattern: str) -> List[int]:
     if not text or not pattern:
         return []
@@ -367,6 +387,7 @@ def _find_all_positions(text: str, pattern: str) -> List[int]:
     return positions
 
 
+# Internal helper for find block index for stream pos.
 def _find_block_index_for_stream_pos(boxes: List[dict], pos: int) -> Optional[int]:
     for i, box in enumerate(boxes):
         if box["stream_start"] <= pos < box["stream_stop"]:
@@ -374,6 +395,7 @@ def _find_block_index_for_stream_pos(boxes: List[dict], pos: int) -> Optional[in
     return None
 
 
+# Internal helper for collect boxes and confidence.
 def _collect_boxes_and_confidence(
     matched_boxes: List[dict],
     paragraph_text: str,
@@ -389,6 +411,7 @@ def _collect_boxes_and_confidence(
     return rects, locations, primary_page, confidence
 
 
+# Internal helper for get candidate pages.
 def _get_candidate_pages(
     indexed_pages: List[dict],
     estimated_page: Optional[int],
@@ -409,6 +432,7 @@ def _get_candidate_pages(
     ]
 
 
+# Internal helper for extend candidate across pages.
 def _extend_candidate_across_pages(
     candidate_boxes: List[dict],
     paragraph_text: str,
@@ -457,6 +481,7 @@ def _extend_candidate_across_pages(
     return collected
 
 
+# Internal helper for score ratio and size.
 def _score_ratio_and_size(candidate_words: int, paragraph_words: int, box_count: int) -> float:
     ratio = candidate_words / max(paragraph_words, 1)
 
@@ -471,6 +496,7 @@ def _score_ratio_and_size(candidate_words: int, paragraph_words: int, box_count:
     return ratio_score - size_penalty
 
 
+# Internal helper for find best heading match.
 def _find_best_heading_match(
     text: str,
     indexed_pages: List[dict],
@@ -530,6 +556,7 @@ def _find_best_heading_match(
     }
 
 
+# Internal helper for head tail anchor match.
 def _head_tail_anchor_match(
     paragraph_text: str,
     page: dict,
@@ -616,6 +643,7 @@ def _head_tail_anchor_match(
     }
 
 
+# Internal helper for head only collect match.
 def _head_only_collect_match(
     paragraph_text: str,
     page: dict,
@@ -720,6 +748,7 @@ def _head_only_collect_match(
     }
 
 
+# Internal helper for fuzzy window match.
 def _fuzzy_window_match(
     paragraph_text: str,
     indexed_pages: List[dict],
@@ -785,6 +814,7 @@ def _fuzzy_window_match(
     }
 
 
+# Internal helper for find best paragraph match.
 def _find_best_paragraph_match(text: str, indexed_pages: List[dict]) -> dict:
     """
     這裡改成 exclude_bullets=False
@@ -840,6 +870,7 @@ def _find_best_paragraph_match(text: str, indexed_pages: List[dict]) -> dict:
     return _fuzzy_window_match(text, indexed_pages, exclude_bullets=False)
 
 
+# Internal helper for find best bullet item match.
 def _find_best_bullet_item_match(item_text: str, indexed_pages: List[dict]) -> dict:
     if not item_text or not item_text.strip():
         return {
@@ -942,6 +973,7 @@ def _find_best_bullet_item_match(item_text: str, indexed_pages: List[dict]) -> d
     }
 
 
+# Internal helper for find best bullet match.
 def _find_best_bullet_match(intro_text: str, items: List[str], indexed_pages: List[dict]) -> dict:
     all_rects: List[List[float]] = []
     all_locations: List[dict] = []
@@ -1003,6 +1035,7 @@ def _find_best_bullet_match(intro_text: str, items: List[str], indexed_pages: Li
     }
 
 
+# Convert raw LLM elements into stable paragraph results and PDF locations.
 def build_paragraph_results(raw_items: List[dict], position_data: Optional[dict] = None) -> List[dict]:
     results: List[Dict[str, Any]] = []
 

@@ -1,3 +1,5 @@
+# Command-line entry point for running the paper background worker process.
+
 import logging
 
 from app.core.logging_config import setup_logging

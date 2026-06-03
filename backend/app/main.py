@@ -1,3 +1,5 @@
+# FastAPI application setup, router registration, startup recovery, and CORS configuration.
+
 import logging
 
 from fastapi import FastAPI
@@ -33,6 +35,7 @@ Base.metadata.create_all(bind=engine)
 
 
 @app.on_event("startup")
+# Repair stale paper/task state and run storage cleanup when the API starts.
 def recover_stale_processing_tasks_on_startup():
     """Repair paper/task consistency after a backend restart.
 
@@ -73,5 +76,6 @@ app.include_router(highlights.router)
 
 
 @app.get("/")
+# Simple health response for the API root.
 def root():
     return {"message": "Paper Reader API is running"}

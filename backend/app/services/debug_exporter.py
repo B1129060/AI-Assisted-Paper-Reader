@@ -1,3 +1,5 @@
+# Optional debug export helpers gated by ENABLE_DEBUG_EXPORTS.
+
 import json
 import os
 from typing import List, Dict, Any
@@ -5,16 +7,19 @@ from typing import List, Dict, Any
 from app.config import settings
 
 
+# Read the debug export feature flag.
 def debug_exports_enabled() -> bool:
     return bool(getattr(settings, "ENABLE_DEBUG_EXPORTS", False))
 
 
+# Create a debug output directory only when debug exports are enabled.
 def ensure_dir(path: str) -> None:
     if not debug_exports_enabled():
         return
     os.makedirs(path, exist_ok=True)
 
 
+# Write a debug text file only when debug exports are enabled.
 def save_text(path: str, content: str) -> None:
     if not debug_exports_enabled():
         return
@@ -22,6 +27,7 @@ def save_text(path: str, content: str) -> None:
         f.write(content)
 
 
+# Write a debug JSON file only when debug exports are enabled.
 def save_json(path: str, data: Any) -> None:
     if not debug_exports_enabled():
         return
@@ -29,6 +35,7 @@ def save_json(path: str, data: Any) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+# Write a human-readable chunk dump for parser debugging.
 def save_chunks_txt(path: str, chunks: List[Dict[str, Any]], include_context: bool = False) -> None:
     if not debug_exports_enabled():
         return

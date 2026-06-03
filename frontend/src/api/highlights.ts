@@ -1,3 +1,5 @@
+// Frontend API client for text and PDF highlight operations.
+
 import type {
   CreatePdfHighlightPayload,
   CreateTextHighlightPayload,
@@ -8,6 +10,7 @@ import type {
 
 import { API_BASE } from "./apiConfig";
 
+// Get error message.
 async function getErrorMessage(res: Response, fallback: string) {
   try {
     const data = await res.json();
@@ -36,6 +39,7 @@ async function getErrorMessage(res: Response, fallback: string) {
   return fallback;
 }
 
+// Fetch text and PDF highlights for one paper and language.
 export async function fetchHighlights(
   paperId: number,
   language: "en" | "zh"
@@ -47,6 +51,7 @@ export async function fetchHighlights(
   return res.json();
 }
 
+// Create text highlight.
 export async function createTextHighlight(
   payload: CreateTextHighlightPayload
 ): Promise<TextHighlight> {
@@ -61,6 +66,7 @@ export async function createTextHighlight(
   return res.json();
 }
 
+// Delete text highlight.
 export async function deleteTextHighlight(highlightId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/highlights/text/${highlightId}`, {
     method: "DELETE",
@@ -70,6 +76,7 @@ export async function deleteTextHighlight(highlightId: number): Promise<void> {
   }
 }
 
+// Create pdf highlight.
 export async function createPdfHighlight(
   payload: CreatePdfHighlightPayload
 ): Promise<PdfHighlight> {
@@ -84,6 +91,7 @@ export async function createPdfHighlight(
   return res.json();
 }
 
+// Delete pdf highlight.
 export async function deletePdfHighlight(highlightId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/highlights/pdf/${highlightId}`, {
     method: "DELETE",

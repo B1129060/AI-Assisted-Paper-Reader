@@ -1,3 +1,5 @@
+# Markdown cleanup and section-aware chunk construction before LLM processing.
+
 import re
 from typing import List, Dict, Any, Optional
 
@@ -28,12 +30,14 @@ DOI_RE = re.compile(
 )
 
 
+# Strip md.
 def strip_md(text: str) -> str:
     text = re.sub(r"[*_#`]+", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
+# Normalize markdown text.
 def normalize_markdown_text(text: str) -> str:
     text = text.replace("\u00a0", " ")
     text = re.sub(r"\r\n?", "\n", text)
@@ -42,16 +46,19 @@ def normalize_markdown_text(text: str) -> str:
     return text.strip()
 
 
+# Split markdown blocks.
 def split_markdown_blocks(markdown_text: str) -> List[str]:
     text = normalize_markdown_text(markdown_text)
     return [b.strip() for b in text.split("\n\n") if b.strip()]
 
 
+# Is page number.
 def is_page_number(text: str) -> bool:
     t = strip_md(text)
     return bool(re.fullmatch(r"\d{1,4}", t))
 
 
+# Is running header like.
 def is_running_header_like(text: str) -> bool:
     """
     泛化版 running header / footer 偵測：
@@ -117,10 +124,12 @@ def is_running_header_like(text: str) -> bool:
     return False
 
 
+# Is header footer.
 def is_header_footer(text: str) -> bool:
     return is_running_header_like(text)
 
 
+# Is license or copyright.
 def is_license_or_copyright(text: str) -> bool:
     """
     保守版：
@@ -156,11 +165,13 @@ def is_license_or_copyright(text: str) -> bool:
     return False
 
 
+# Is footnote.
 def is_footnote(text: str) -> bool:
     t = text.strip()
     return bool(re.match(r"^>\s*[\d∗*]+", t))
 
 
+# Is image placeholder.
 def is_image_placeholder(text: str) -> bool:
     t = strip_md(text).lower()
     return (
@@ -170,6 +181,7 @@ def is_image_placeholder(text: str) -> bool:
     )
 
 
+# Is affiliation or manuscript.
 def is_affiliation_or_manuscript(text: str) -> bool:
     raw = text.strip()
     t = strip_md(text).lower()
@@ -212,6 +224,7 @@ def is_affiliation_or_manuscript(text: str) -> bool:
     return False
 
 
+# Is table like block.
 def is_table_like_block(text: str) -> bool:
     """
     抓表格 markdown / 表格殘片。
@@ -241,6 +254,7 @@ def is_table_like_block(text: str) -> bool:
     return False
 
 
+# Is caption block.
 def is_caption_block(text: str) -> bool:
     t = text.strip()
 
@@ -262,11 +276,13 @@ def is_caption_block(text: str) -> bool:
     return False
 
 
+# Is bullet block.
 def is_bullet_block(text: str) -> bool:
     t = strip_md(text)
     return bool(re.match(r"^[-•]\s*", t))
 
 
+# Is intro heading title.
 def is_intro_heading_title(title: str | None) -> bool:
     """
     判斷 section title 是否像 Introduction。
@@ -286,6 +302,7 @@ def is_intro_heading_title(title: str | None) -> bool:
     )
 
 
+# Looks like keywords metadata block.
 def looks_like_keywords_metadata_block(text: str) -> bool:
     """
     抓 Keywords / Index Terms 這類 metadata block。
@@ -300,6 +317,7 @@ def looks_like_keywords_metadata_block(text: str) -> bool:
     )
 
 
+# Looks like jel block.
 def looks_like_jel_block(text: str) -> bool:
     """
     抓 JEL / classification 類 metadata block。
@@ -319,6 +337,7 @@ def looks_like_jel_block(text: str) -> bool:
     return False
 
 
+# Looks like abstract section candidate.
 def looks_like_abstract_section_candidate(blocks: list[str]) -> bool:
     """
     用來判斷文件最前面的 UNKNOWN section 是否其實是 abstract。
@@ -355,6 +374,7 @@ def looks_like_abstract_section_candidate(blocks: list[str]) -> bool:
     return True
 
 
+# Extract section title from text.
 def extract_section_title_from_text(text: str) -> Optional[str]:
     t = strip_md(text)
 
@@ -396,15 +416,18 @@ def extract_section_title_from_text(text: str) -> Optional[str]:
     return None
 
 
+# Is tail heading.
 def is_tail_heading(block: str) -> bool:
     title = extract_section_title_from_block(block)
     return title in TAIL_HEADINGS if title else False
 
 
+# Get section title.
 def get_section_title(block: str) -> Optional[str]:
     return extract_section_title_from_block(block)
 
 
+# Is major section heading.
 def is_major_section_heading(block: str) -> bool:
     title = extract_section_title_from_block(block)
     if not title:
@@ -412,6 +435,7 @@ def is_major_section_heading(block: str) -> bool:
     return title not in TAIL_HEADINGS
 
 
+# Should remove from body.
 def should_remove_from_body(text: str) -> bool:
     return (
         is_page_number(text)
@@ -426,11 +450,13 @@ def should_remove_from_body(text: str) -> bool:
     )
 
 
+# Looks like keywords block.
 def looks_like_keywords_block(text: str) -> bool:
     t = strip_md(text).lower()
     return t.startswith("keywords") or t.startswith("index terms")
 
 
+# Looks like natural body paragraph.
 def looks_like_natural_body_paragraph(text: str) -> bool:
     """
     用來在前言區判斷某 block 是否像無標題 abstract / 正文段落。
@@ -469,6 +495,7 @@ def looks_like_natural_body_paragraph(text: str) -> bool:
     return True
 
 
+# Split document blocks.
 def split_document_blocks(blocks: List[str]) -> Dict[str, List[str]]:
     """
     將抽出的 blocks 分成：
@@ -579,6 +606,7 @@ def split_document_blocks(blocks: List[str]) -> Dict[str, List[str]]:
     }
 
 
+# Starts with lowercase alpha.
 def starts_with_lowercase_alpha(text: str) -> bool:
     """
     找出文字中第一個英文字母，判斷是否為小寫。
@@ -596,6 +624,7 @@ def starts_with_lowercase_alpha(text: str) -> bool:
     return False
 
 
+# Is markdown heading block.
 def is_markdown_heading_block(text: str) -> bool:
     """
     判斷 block 是否明顯是 markdown heading。
@@ -607,6 +636,7 @@ def is_markdown_heading_block(text: str) -> bool:
     return first_line.startswith("## ")
 
 
+# Should merge continuation.
 def should_merge_continuation(prev_text: str, curr_text: str) -> bool:
     prev_clean = strip_md(prev_text)
     curr_clean = strip_md(curr_text)
@@ -662,6 +692,7 @@ def should_merge_continuation(prev_text: str, curr_text: str) -> bool:
     return False
 
 
+# Merge continuation blocks.
 def merge_continuation_blocks(blocks: List[str]) -> List[str]:
     if not blocks:
         return []
@@ -679,10 +710,12 @@ def merge_continuation_blocks(blocks: List[str]) -> List[str]:
     return merged
 
 
+# Get first line.
 def get_first_line(text: str) -> str:
     return text.splitlines()[0].strip()
 
 
+# Extract section title from block.
 def extract_section_title_from_block(block: str) -> Optional[str]:
     first_line = get_first_line(block)
 
@@ -709,6 +742,7 @@ def extract_section_title_from_block(block: str) -> Optional[str]:
     return None
 
 
+# Split blocks into sections safe.
 def split_blocks_into_sections_safe(blocks: list[str]):
     sections = []
 
@@ -751,6 +785,7 @@ def split_blocks_into_sections_safe(blocks: list[str]):
     return sections
 
 
+# Build chunks from sections.
 def build_chunks_from_sections(
     sections: List[Dict[str, Any]],
     max_chars: int = 2200,

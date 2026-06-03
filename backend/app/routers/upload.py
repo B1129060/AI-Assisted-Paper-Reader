@@ -1,3 +1,5 @@
+# API route for validating PDF uploads, storing files, creating paper rows, and queueing parse tasks.
+
 import os
 import shutil
 import uuid
@@ -25,14 +27,17 @@ INCOMING_DIR = os.path.join(UPLOAD_DIR, "_incoming")
 os.makedirs(INCOMING_DIR, exist_ok=True)
 
 
+# Build the final per-user/per-paper upload directory path.
 def _get_paper_upload_dir(user_id: int, paper_id: int) -> str:
     return os.path.join(UPLOAD_DIR, f"user_{user_id}", f"paper_{paper_id}")
 
 
+# Build the final stored PDF path for a paper.
 def _get_paper_pdf_path(user_id: int, paper_id: int) -> str:
     return os.path.join(_get_paper_upload_dir(user_id, paper_id), "original.pdf")
 
 
+# Remove a failed upload file or paper directory after rollback.
 def _cleanup_uploaded_file_path(file_path: str | None, user_id: int | None = None, paper_id: int | None = None) -> None:
     if user_id is not None and paper_id is not None:
         paper_dir = _get_paper_upload_dir(user_id, paper_id)
@@ -52,6 +57,7 @@ def _cleanup_uploaded_file_path(file_path: str | None, user_id: int | None = Non
         except OSError:
             pass
 
+# Validate the uploaded filename, extension, and content type.
 def _validate_pdf_upload_metadata(file: UploadFile) -> str:
     original_filename = file.filename or ""
     if not original_filename.strip():
@@ -77,6 +83,7 @@ def _validate_pdf_upload_metadata(file: UploadFile) -> str:
     return original_filename
 
 
+# Stream the PDF to disk while validating header and size limits.
 def _save_and_validate_pdf_file(file: UploadFile, save_path: str) -> int:
     max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
     chunk_size = settings.PDF_UPLOAD_CHUNK_BYTES
@@ -130,6 +137,7 @@ def _save_and_validate_pdf_file(file: UploadFile, save_path: str) -> int:
 
 
 @router.post("/pdf", response_model=UploadResponse)
+# Validate upload, create the paper row, move the PDF, and queue parse_overview.
 async def upload_pdf(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),

@@ -1,3 +1,5 @@
+# Full overview regeneration workflow using already stored paragraph elements.
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -16,6 +18,7 @@ from app.services.overview_generator import (
 from app.services.translation_service import translate_overview_to_zh
 
 
+# Internal helper for parse json list.
 def _parse_json_list(raw: str | None) -> list:
     if not raw:
         return []
@@ -27,14 +30,17 @@ def _parse_json_list(raw: str | None) -> list:
 
 
 
+# Internal helper for has text.
 def _has_text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+# Internal helper for has non empty list.
 def _has_non_empty_list(value: Any) -> bool:
     return isinstance(value, list) and len(value) > 0
 
 
+# Internal helper for validate overview payload.
 def _validate_overview_payload(
     overview_data: dict,
     section_summaries: list,
@@ -68,6 +74,7 @@ def _validate_overview_payload(
             f"Missing or empty fields: {', '.join(missing)}."
         )
 
+# Rebuild overview input elements from stored paragraph rows.
 def rebuild_elements_from_db(db: Session, paper_id: int, lang: str = "en") -> List[dict]:
     rows = (
         db.query(Paragraph)
@@ -106,6 +113,7 @@ def rebuild_elements_from_db(db: Session, paper_id: int, lang: str = "en") -> Li
     return elements
 
 
+# Regenerate overview payloads from existing stored elements.
 def regenerate_full_overview(db: Session, paper_id: int) -> dict:
     elements_en = rebuild_elements_from_db(db, paper_id, lang="en")
 
@@ -163,6 +171,7 @@ def regenerate_full_overview(db: Session, paper_id: int) -> dict:
         "status": "regenerated",
     }
 
+# Internal helper for delete overview text highlights.
 def _delete_overview_text_highlights(db: Session, paper_id: int) -> None:
     (
         db.query(TextHighlight)
@@ -174,6 +183,7 @@ def _delete_overview_text_highlights(db: Session, paper_id: int) -> None:
     )
 
 
+# Worker implementation for overview regeneration.
 def process_regenerate_overview_task(db: Session, paper_id: int) -> dict:
     result = regenerate_full_overview(db, paper_id)
 

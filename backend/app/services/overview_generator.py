@@ -1,3 +1,5 @@
+# Paper-level overview, abstract summary, section summary, and fallback generation helpers.
+
 import json
 import re
 from typing import Any, Dict, List
@@ -16,6 +18,7 @@ if getattr(settings, "LLM_BASE_URL", None):
 client = OpenAI(**client_kwargs)
 
 
+# Internal helper for extract json object.
 def _extract_json_object(content: str) -> dict:
     content = content.strip()
 
@@ -43,6 +46,7 @@ def _extract_json_object(content: str) -> dict:
     return {}
 
 
+# Internal helper for call json llm.
 def _call_json_llm(prompt: str) -> dict:
     response = client.chat.completions.create(
         model=settings.LLM_MODEL,
@@ -63,6 +67,7 @@ def _call_json_llm(prompt: str) -> dict:
     return _extract_json_object(content)
 
 
+# Make section key.
 def make_section_key(section_title: str) -> str:
     text = (section_title or "").strip().lower()
     text = re.sub(r"[^\w\s]", " ", text)
@@ -70,11 +75,13 @@ def make_section_key(section_title: str) -> str:
     return text
 
 
+# Internal helper for is decimal subsection heading.
 def _is_decimal_subsection_heading(text: str) -> bool:
     t = text.strip()
     return bool(re.match(r"^\d+\.\d+(\.\d+)*\s+\S+", t))
 
 
+# Internal helper for is alpha subsection heading.
 def _is_alpha_subsection_heading(text: str) -> bool:
     t = text.strip()
     return bool(
@@ -83,6 +90,7 @@ def _is_alpha_subsection_heading(text: str) -> bool:
     )
 
 
+# Internal helper for heading style family.
 def _heading_style_family(text: str) -> str:
     t = text.strip()
 
@@ -101,6 +109,7 @@ def _heading_style_family(text: str) -> str:
     return "other"
 
 
+# Normalize heading levels.
 def normalize_heading_levels(elements: List[dict]) -> List[dict]:
     normalized = [dict(el) for el in elements]
 
@@ -153,6 +162,7 @@ def normalize_heading_levels(elements: List[dict]) -> List[dict]:
     return normalized
 
 
+# Internal helper for build overview source.
 def _build_overview_source(elements: List[dict]) -> str:
     lines: List[str] = []
 
@@ -182,6 +192,7 @@ def _build_overview_source(elements: List[dict]) -> str:
     return "\n".join(lines)
 
 
+# Internal helper for build overview prompt.
 def _build_overview_prompt(elements: List[dict]) -> str:
     source = _build_overview_source(elements)
 
@@ -226,6 +237,7 @@ SOURCE:
 
 
 
+# Internal helper for fallback overview.
 def _fallback_overview(elements: List[dict]) -> dict:
     """
     Deterministic fallback used when the LLM returns invalid JSON or an incomplete
@@ -314,6 +326,7 @@ def _fallback_overview(elements: List[dict]) -> dict:
         "highlight_summaries": highlight_summaries,
     }
 
+# Generate or fall back to paper-level overview data.
 def generate_overview(elements: List[dict]) -> dict:
     data = _call_json_llm(_build_overview_prompt(elements))
 
@@ -378,6 +391,7 @@ def generate_overview(elements: List[dict]) -> dict:
     return result
 
 
+# Internal helper for group main sections.
 def _group_main_sections(elements: List[dict]) -> List[dict]:
     sections: List[dict] = []
     current = None
@@ -403,6 +417,7 @@ def _group_main_sections(elements: List[dict]) -> List[dict]:
     return [s for s in sections if s["section_title"] and s["elements"]]
 
 
+# Internal helper for build section prompt.
 def _build_section_prompt(section_title: str, section_elements: List[dict]) -> str:
     parts: List[str] = []
 
@@ -446,6 +461,7 @@ SOURCE:
 """.strip()
 
 
+# Generate section summaries from structured elements.
 def generate_section_summaries(elements: List[dict]) -> List[dict]:
     grouped_sections = _group_main_sections(elements)
     outputs: List[dict] = []
@@ -477,6 +493,7 @@ def generate_section_summaries(elements: List[dict]) -> List[dict]:
     return outputs
 
 
+# Internal helper for element has text evidence.
 def _element_has_text_evidence(el: dict) -> bool:
     if (el.get("summary") or "").strip():
         return True
@@ -495,11 +512,13 @@ def _element_has_text_evidence(el: dict) -> bool:
     return any(str(item).strip() for item in items)
 
 
+# Internal helper for is abstract heading text.
 def _is_abstract_heading_text(text: str) -> bool:
     normalized = re.sub(r"[^a-z]", "", (text or "").lower())
     return normalized == "abstract" or normalized.startswith("abstract")
 
 
+# Internal helper for collect abstract candidates.
 def _collect_abstract_candidates(elements: List[dict]) -> List[dict]:
     """
     The parser does not always emit an exact heading with text == ABSTRACT.
@@ -553,6 +572,7 @@ def _collect_abstract_candidates(elements: List[dict]) -> List[dict]:
     return fallback
 
 
+# Internal helper for build abstract source.
 def _build_abstract_source(abstract_elements: List[dict]) -> str:
     parts: List[str] = []
 
@@ -579,6 +599,7 @@ def _build_abstract_source(abstract_elements: List[dict]) -> str:
     return "\n".join(parts)
 
 
+# Internal helper for fallback abstract summary.
 def _fallback_abstract_summary(abstract_elements: List[dict], all_elements: List[dict]) -> str:
     collected: List[str] = []
 
@@ -608,6 +629,7 @@ def _fallback_abstract_summary(abstract_elements: List[dict], all_elements: List
     return summary
 
 
+# Generate an abstract summary from abstract candidates.
 def generate_abstract_summary(elements: List[dict]) -> str:
     abstract_elements = _collect_abstract_candidates(elements)
 

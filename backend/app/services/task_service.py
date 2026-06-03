@@ -1,3 +1,5 @@
+# Background task creation, claiming, retry, heartbeat, failure classification, and completion logic.
+
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -18,10 +20,12 @@ TASK_REGENERATE_OVERVIEW = "regenerate_overview"
 ACTIVE_TASK_STATUSES = ("queued", "processing")
 
 
+# Utc now.
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Internal helper for as aware.
 def _as_aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -30,10 +34,12 @@ def _as_aware(value: datetime | None) -> datetime | None:
     return value
 
 
+# Internal helper for short.
 def _short(message: str, limit: int = 1000) -> str:
     return (message or "Unknown task error")[:limit]
 
 
+# Internal helper for get error attr.
 def _get_error_attr(error: Exception | str, name: str) -> str | None:
     value = getattr(error, name, None)
     if value is None:
@@ -41,6 +47,7 @@ def _get_error_attr(error: Exception | str, name: str) -> str | None:
     return str(value)
 
 
+# Classify task errors into user-facing messages and retryability.
 def classify_task_error(error: Exception | str) -> tuple[str, bool]:
     """Return a user-facing message and whether the task is worth retrying.
 
@@ -111,6 +118,7 @@ def classify_task_error(error: Exception | str) -> tuple[str, bool]:
     return (_short(raw_message or "Unknown task error", 1000), True)
 
 
+# Internal helper for mark parse overview paper queued.
 def _mark_parse_overview_paper_queued(paper: Paper | None, message: str | None = None) -> None:
     if not paper:
         return
@@ -130,6 +138,7 @@ def _mark_parse_overview_paper_queued(paper: Paper | None, message: str | None =
 
 
 
+# Internal helper for mark parse overview paper processing.
 def _mark_parse_overview_paper_processing(paper: Paper | None) -> None:
     if not paper:
         return
@@ -152,6 +161,7 @@ def _mark_parse_overview_paper_processing(paper: Paper | None) -> None:
 
 
 
+# Internal helper for mark parse overview paper failed.
 def _mark_parse_overview_paper_failed(paper: Paper | None, message: str) -> None:
     if not paper:
         return
@@ -172,6 +182,7 @@ def _mark_parse_overview_paper_failed(paper: Paper | None, message: str) -> None
     paper.last_error_message = short_message
 
 
+# Internal helper for mark translate zh paper queued.
 def _mark_translate_zh_paper_queued(paper: Paper | None, message: str | None = None) -> None:
     if not paper:
         return
@@ -184,6 +195,7 @@ def _mark_translate_zh_paper_queued(paper: Paper | None, message: str | None = N
         paper.last_error_message = _short(message, 500)
 
 
+# Internal helper for mark translate zh paper processing.
 def _mark_translate_zh_paper_processing(paper: Paper | None) -> None:
     if not paper:
         return
@@ -196,6 +208,7 @@ def _mark_translate_zh_paper_processing(paper: Paper | None) -> None:
     paper.last_error_message = None
 
 
+# Internal helper for mark translate zh paper failed.
 def _mark_translate_zh_paper_failed(paper: Paper | None, message: str) -> None:
     if not paper:
         return
@@ -208,6 +221,7 @@ def _mark_translate_zh_paper_failed(paper: Paper | None, message: str) -> None:
     paper.last_error_message = short_message
 
 
+# Internal helper for mark regenerate overview paper queued.
 def _mark_regenerate_overview_paper_queued(paper: Paper | None, message: str | None = None) -> None:
     if not paper:
         return
@@ -220,6 +234,7 @@ def _mark_regenerate_overview_paper_queued(paper: Paper | None, message: str | N
         paper.last_error_message = _short(message, 500)
 
 
+# Internal helper for mark regenerate overview paper processing.
 def _mark_regenerate_overview_paper_processing(paper: Paper | None) -> None:
     if not paper:
         return
@@ -232,6 +247,7 @@ def _mark_regenerate_overview_paper_processing(paper: Paper | None) -> None:
     paper.last_error_message = None
 
 
+# Internal helper for mark regenerate overview paper completed.
 def _mark_regenerate_overview_paper_completed(paper: Paper | None) -> None:
     if not paper:
         return
@@ -242,6 +258,7 @@ def _mark_regenerate_overview_paper_completed(paper: Paper | None) -> None:
     paper.last_error_message = None
 
 
+# Internal helper for mark regenerate overview paper failed.
 def _mark_regenerate_overview_paper_failed(paper: Paper | None, message: str) -> None:
     if not paper:
         return
@@ -255,6 +272,7 @@ def _mark_regenerate_overview_paper_failed(paper: Paper | None, message: str) ->
 
 
 
+# Insert a queued background task row.
 def create_task(
     db: Session,
     *,
@@ -286,6 +304,7 @@ def create_task(
 
 
 
+# Queue parse and initial overview generation for a paper.
 def create_parse_overview_task(db: Session, *, paper: Paper, user: User) -> Task:
     return create_task(
         db,
@@ -299,6 +318,7 @@ def create_parse_overview_task(db: Session, *, paper: Paper, user: User) -> Task
     )
 
 
+# Return the oldest active task for a paper and optional task type.
 def get_active_task_for_paper(
     db: Session,
     *,
@@ -315,6 +335,7 @@ def get_active_task_for_paper(
     return query.order_by(Task.created_at.asc(), Task.id.asc()).first()
 
 
+# Queue translation unless a matching active task already exists.
 def create_translate_zh_task(db: Session, *, paper: Paper, user: User) -> Task:
     existing = get_active_task_for_paper(
         db,
@@ -335,6 +356,7 @@ def create_translate_zh_task(db: Session, *, paper: Paper, user: User) -> Task:
 
 
 
+# Queue overview regeneration unless a matching active task already exists.
 def create_regenerate_overview_task(db: Session, *, paper: Paper, user: User) -> Task:
     existing = get_active_task_for_paper(
         db,
@@ -355,6 +377,7 @@ def create_regenerate_overview_task(db: Session, *, paper: Paper, user: User) ->
 
 
 
+# Claim the oldest queued task and mark the matching paper status processing.
 def claim_next_queued_task(db: Session) -> Task | None:
     query = (
         db.query(Task)
@@ -404,6 +427,7 @@ def claim_next_queued_task(db: Session) -> Task | None:
 
 
 
+# Refresh locked_at as the worker heartbeat for a processing task.
 def refresh_task_heartbeat(db: Session, task_id: int) -> bool:
     """Refresh locked_at for a processing task.
 
@@ -422,6 +446,7 @@ def refresh_task_heartbeat(db: Session, task_id: int) -> bool:
 
 
 
+# Requeue or fail tasks whose worker heartbeat timed out.
 def reclaim_stale_processing_tasks(db: Session, *, limit: int = 50) -> dict[str, int]:
     timeout_minutes = settings.WORKER_TASK_TIMEOUT_MINUTES
     if timeout_minutes <= 0:
@@ -511,6 +536,7 @@ def reclaim_stale_processing_tasks(db: Session, *, limit: int = 50) -> dict[str,
 
 
 
+# Internal helper for auto create translate zh task after parse success.
 def _auto_create_translate_zh_task_after_parse_success(db: Session, paper: Paper | None) -> Task | None:
     """Queue Chinese translation after parse + initial overview are both complete.
 
@@ -578,6 +604,7 @@ def _auto_create_translate_zh_task_after_parse_success(db: Session, paper: Paper
     return task
 
 
+# Mark a task completed and run any completion-side effects.
 def mark_task_completed(db: Session, task: Task) -> None:
     task.status = "completed"
     task.error_message = None
@@ -597,6 +624,7 @@ def mark_task_completed(db: Session, task: Task) -> None:
 
 
 
+# Retry or fail a task after converting the exception into a user-facing message.
 def mark_task_failed(db: Session, task: Task, error: Exception | str) -> None:
     message, retryable = classify_task_error(error)
     raw_error = _short(str(error), 1000)

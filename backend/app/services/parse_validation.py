@@ -1,7 +1,10 @@
+# Heuristic validators for parsed paragraph quality diagnostics.
+
 import re
 from statistics import mean
 
 
+# Is heading like.
 def is_heading_like(text: str) -> bool:
     text = text.strip()
     if not text:
@@ -18,6 +21,7 @@ def is_heading_like(text: str) -> bool:
     return False
 
 
+# Is caption like.
 def is_caption_like(text: str) -> bool:
     lowered = text.strip().lower()
     if not lowered:
@@ -33,6 +37,7 @@ def is_caption_like(text: str) -> bool:
     return any(re.match(pattern, lowered) for pattern in patterns)
 
 
+# Metadata score.
 def metadata_score(
     text: str,
     y0: float | None = None,
@@ -107,6 +112,7 @@ def metadata_score(
     return score
 
 
+# Is metadata like.
 def is_metadata_like(
     text: str,
     y0: float | None = None,
@@ -116,15 +122,18 @@ def is_metadata_like(
     return metadata_score(text, y0=y0, y1=y1, page_height=page_height) >= 4
 
 
+# Is reference heading.
 def is_reference_heading(text: str) -> bool:
     return text.strip().upper() == "REFERENCES"
 
 
+# Is biography heading.
 def is_biography_heading(text: str) -> bool:
     t = text.strip().upper()
     return t in {"BIOGRAPHIES", "BIOGRAPHY"}
 
 
+# Has hyphenation artifact.
 def has_hyphenation_artifact(text: str) -> bool:
     text = text.strip()
 
@@ -139,6 +148,7 @@ def has_hyphenation_artifact(text: str) -> bool:
     return False
 
 
+# Looks like heading body merged.
 def looks_like_heading_body_merged(text: str) -> bool:
     text = text.strip()
 
@@ -150,6 +160,7 @@ def looks_like_heading_body_merged(text: str) -> bool:
     return False
 
 
+# Paragraph quality warnings.
 def paragraph_quality_warnings(
     paragraph: str,
     y0: float | None = None,
@@ -192,6 +203,7 @@ def paragraph_quality_warnings(
     return warnings
 
 
+# Compute paragraph stats.
 def compute_paragraph_stats(paragraphs: list[str]) -> dict:
     if not paragraphs:
         return {
@@ -239,6 +251,7 @@ def compute_paragraph_stats(paragraphs: list[str]) -> dict:
     }
 
 
+# Validate page result.
 def validate_page_result(
     page_number: int,
     layout_type: str,
@@ -354,6 +367,7 @@ def validate_page_result(
     }
 
 
+# Return parser quality warnings for a parsed document.
 def validate_document_result(page_reports: list[dict]) -> dict:
     if not page_reports:
         return {
